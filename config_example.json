@@ -1,0 +1,4 @@
+{
+	"cert_bundle": "/path/to/certificate.pem",
+	"password": "your-password"
+}
