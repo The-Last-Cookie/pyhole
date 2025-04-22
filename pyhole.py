@@ -421,6 +421,7 @@ class GroupAPI:
 		:param: name: Name of the group
 		:param: comment: Comment describing the group
 		:param: enabled: Whether the group is enabled or not
+		:param: (optional) names [string]: Names of other groups to create
 		:returns: JSON object
 		"""
 		group = {
