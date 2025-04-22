@@ -10,7 +10,7 @@ def get_config(config_name: str):
 
 	return config[config_name]
 
-def set_config(config_name: str, value) -> bool:
+def set_config(config_name: str, value) -> None:
 	config = None
 
 	with open(CONFIG_FILE, mode='r') as file:
