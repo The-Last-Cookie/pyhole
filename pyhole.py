@@ -344,13 +344,47 @@ class DnsFilterAPI:
 		self._pi = pi
 
 	def is_active(self) -> bool:
-		pass
+		return requests.get(self._pi.url + "/dns/blocking", headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
-	def enable(self):
-		pass
+	def enable(self, timer: int):
+		"""
+		Enable blocking for a set amount of seconds. After the timer has ended, the opposite blocking mode will be set.
 
-	def disable(self):
-		pass
+		Setting _timer_ to 0 causes the blocking mode to be set indefinitely.
+
+		:params: timer: Time in seconds for enabling blocking
+		:returns: JSON object
+		"""
+		# Set timer to indefinite
+		if timer == 0:
+			timer = None
+
+		payload = {
+			"blocking": True,
+			"timer": timer
+		}
+
+		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def disable(self, timer: int):
+		"""
+		Disable blocking for a set amount of seconds. After the timer has ended, the opposite blocking mode will be set.
+
+		Setting _timer_ to 0 causes the blocking mode to be set indefinitely.
+
+		:params: timer: Time in seconds for disabling blocking
+		:returns: JSON object
+		"""
+		# Set timer to indefinite
+		if timer == 0:
+			timer = None
+
+		payload = {
+			"blocking": False,
+			"timer": timer
+		}
+
+		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
 
 class ClientAPI:
