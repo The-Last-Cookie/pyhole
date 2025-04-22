@@ -9,10 +9,12 @@ class Pihole:
 	def __init__(self, url: str):
 		self.url = url
 
+		self._headers = None
+
+		self.metrics = MetricAPI(self)
+		self.dns_filter = DnsFilterAPI(self)
 		self.clients = ClientAPI(self)
 		self.groups = GroupAPI(self)
-
-		self._headers = None
 
 	def is_auth_required(self):
 		"""
@@ -126,6 +128,229 @@ class Pihole:
 		Returns: JSON object
 		"""
 		return requests.get(self.url + "/auth/sessions", headers=self._headers, verify=CERT_BUNDLE).json()
+
+	def new_totp_credentials(self):
+		"""
+		Suggest new TOTP credentials for two-factor authentication (2FA).
+
+		:returns: JSON object
+		"""
+		return requests.get(self.url + "/auth/totp", headers=self._headers, verify=CERT_BUNDLE).json()
+
+class MetricAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+	def get_history(self):
+		"""
+		Get activity graph data
+
+		Returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/history", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_client_history(self, count=5):
+		"""
+		Get per-client activity graph data over the last 24 hours.
+
+		The last client returned is a special client that contains the total number of queries that were sent by clients that are not in the top N. This client is always present, even if it has 0 queries and can be identified by the special name "other clients" (mind the space in the hostname) and the IP address "0.0.0.0".
+
+		Note that, due to privacy settings, the returned data may also be empty.
+
+		:param: Number of top clients. If set to 0, all clients will be returned.
+		:returns: JSON object
+		"""
+		return requests.get(self._pi._url + f"/history/clients?N={count}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_long_term_history(self, start: int, end: int):
+		"""
+		Get activity graph data (long-term data).
+
+		:param: Unix timestamp from when the data should be requested
+		:param: Unix timestamp from when the data should be requested
+		:returns: JSON object
+		"""
+		return requests.get(self._pi._url + f"/history/clients?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_long_term_client_history(self, start: int, end: int):
+		"""
+		Get per-client activity graph data (long-term data).
+
+		:param: Unix timestamp from when the data should be requested
+		:param: Unix timestamp from when the data should be requested
+		:returns: JSON object
+		"""
+		return requests.get(self._pi._url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_queries(self, options: dict):
+		# TODO: Documentation?
+		"""
+		Request query details.
+
+		By default, this API callback returns the most recent 100 queries. This can be changed using the parameter _n_.
+
+		:param: options: Filter options. See also Pi-hole API documentation.
+		"""
+		endpoint = "/history/database/clients?"
+
+		query_params = ""
+		for filter, value in options.items():
+			query_params = query_params + filter + "=" + str(value) + "&"
+
+		query_params = query_params.removesuffix("&")
+
+		return requests.get(self._pi._url + endpoint + query_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_suggestions(self):
+		"""
+		Get query filter suggestions suitable for _get\_queries_
+		"""
+		return requests.get(self._pi._url + "/queries/suggestions", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_long_term_query_types(self, start: int, end: int):
+		"""
+		Get query types (long-term database).
+
+		:param: Unix timestamp from when the data should be requested
+		:param: Unix timestamp from when the data should be requested
+		:returns: JSON object
+		"""
+		return requests.get(self._pi._url + f"/stats/database/query_types?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_database_summary(self, start: int, end: int):
+		"""
+		Get database content details.
+
+		:param: Unix timestamp from when the data should be requested
+		:param: Unix timestamp from when the data should be requested
+		:returns: JSON object
+		"""
+		return requests.get(self._pi._url + f"/stats/database/summary?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_long_term_top_clients(self, start: int, end: int, **kwargs):
+		"""
+		Get top clients (long-term database).
+
+		:param: Unix timestamp from when the data should be requested
+		:param: Unix timestamp from when the data should be requested
+		:param: (optional) blocked [bool]: Return information about permitted or blocked queries
+		:param: (optional) count [int]: Number of requested items
+		:returns: JSON object
+		"""
+		optional_params = "&"
+		for filter, value in kwargs.items():
+			optional_params = optional_params + filter + "=" + str(value) + "&"
+
+		optional_params = optional_params.removesuffix("&")
+
+		return requests.get(self._pi.url + f"/stats/database/top_clients?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_long_term_top_domains(self, start: int, end: int, **kwargs):
+		"""
+		Get top domains (long-term database).
+
+		:param: Unix timestamp from when the data should be requested
+		:param: Unix timestamp from when the data should be requested
+		:param: (optional) blocked [bool]: Return information about permitted or blocked queries
+		:param: (optional) count [int]: Number of requested items
+		:returns: JSON object
+		"""
+		optional_params = "&"
+		for filter, value in kwargs.items():
+			optional_params = optional_params + filter + "=" + str(value) + "&"
+
+		optional_params = optional_params.removesuffix("&")
+
+		return requests.get(self._pi.url + f"/stats/database/top_domains?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_long_term_upstreams(self, start: int, end: int):
+		"""
+		Get metrics about Pi-hole's upstream destinations (long-term database).
+
+		:param: Unix timestamp from when the data should be requested
+		:param: Unix timestamp from when the data should be requested
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + f"/stats/database/upstreams?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_query_types(self):
+		"""
+		Get query types.
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/stats/query_types", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_recently_blocked(self, count=1):
+		"""
+		Get most recently blocked domain.
+
+		:param: Number of blocked domains
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + f"/stats/recent_blocked?{count}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_summary(self):
+		"""
+		Get overview of Pi-hole activity
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/stats/summary", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_top_clients(self, **kwargs):
+		"""
+		Get top clients.
+
+		:param: (optional) blocked [bool]: Return information about permitted or blocked queries
+		:param: (optional) count [int]: Number of requested items
+		:returns: JSON object
+		"""
+		optional_params = ""
+		for filter, value in kwargs.items():
+			optional_params = optional_params + filter + "=" + str(value) + "&"
+
+		optional_params = optional_params.removesuffix("&")
+
+		return requests.get(self._pi.url + "/stats/top_clients?" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_top_domains(self, **kwargs):
+		"""
+		Get top domains.
+
+		:param: (optional) blocked [bool]: Return information about permitted or blocked queries
+		:param: (optional) count [int]: Number of requested items
+		:returns: JSON object
+		"""
+		optional_params = ""
+		for filter, value in kwargs.items():
+			optional_params = optional_params + filter + "=" + str(value) + "&"
+
+		optional_params = optional_params.removesuffix("&")
+
+		return requests.get(self._pi.url + "/stats/top_domains?" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_upstreams(self):
+		"""
+		Get metrics about Pi-hole's upstream destinations.
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/stats/upstreams", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+
+class DnsFilterAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+	def is_active(self) -> bool:
+		pass
+
+	def enable(self):
+		pass
+
+	def disable(self):
+		pass
 
 
 class ClientAPI:
