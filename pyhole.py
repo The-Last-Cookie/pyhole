@@ -192,7 +192,6 @@ class MetricAPI:
 		return requests.get(self._pi.url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
 	def get_queries(self, options={}):
-		# TODO: Documentation?
 		# TODO: It is unclear if "from" and "until" are optional or required parameters
 		"""
 		Request query details.
@@ -200,6 +199,22 @@ class MetricAPI:
 		By default, this API callback returns the most recent 100 queries. This can be changed using the parameter _length_.
 
 		:param: options: Filter options. See also Pi-hole API documentation.
+		:returns: JSON object
+
+		:param: (optional) from [integer]: Get queries from...
+		:param: (optional) until [integer]: Get queries until...
+		:param: (optional) length [integer]: Number of results to return
+		:param: (optional) start [integer]: Offset from first record
+		:param: (optional) cursor [integer]: Database ID of the most recent query to be shown
+		:param: (optional) domain [string]: Filter by specific domain (wildcards supported)
+		:param: (optional) client_ip [string]: Filter by specific client IP address (wildcards supported)
+		:param: (optional) client_name [string]: Filter by specific client hostname (wildcards supported)
+		:param: (optional) upstream [string]: Filter by specific upstream (wildcards supported)
+		:param: (optional) type [string]: Filter by specific query type (A, AAAA, ...)
+		:param: (optional) status [string]: Filter by specific query status (GRAVITY, FORWARDED, ...)
+		:param: (optional) reply [string]: Filter by specific reply type (NODATA, NXDOMAIN, ...)
+		:param: (optional) dnssec [string]: Filter by specific DNSSEC status (SECURE, INSECURE, ...)
+		:param: (optional) disk [bool]: Load queries from on-disk database rather than from in-memory
 		"""
 		endpoint = "/history/database/clients?"
 
