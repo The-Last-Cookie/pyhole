@@ -197,7 +197,7 @@ class MetricAPI:
 		"""
 		Request query details.
 
-		By default, this API callback returns the most recent 100 queries. This can be changed using the parameter _n_.
+		By default, this API callback returns the most recent 100 queries. This can be changed using the parameter _length_.
 
 		:param: options: Filter options. See also Pi-hole API documentation.
 		"""
