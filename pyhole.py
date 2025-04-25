@@ -412,7 +412,7 @@ class GroupAPI:
 	def get_group(self, name: str):
 		return requests.get(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
-	def create_group(self, name: str, comment="", enabled=True, *names: str):
+	def create_group(self, name: str, comment="", enabled=True):
 		"""
 		Create a new group.
 
@@ -421,7 +421,6 @@ class GroupAPI:
 		:param: name: Name of the group
 		:param: comment: Comment describing the group
 		:param: enabled: Whether the group is enabled or not
-		:param: (optional) names [string]: Names of other groups to create
 		:returns: JSON object
 		"""
 		group = {
@@ -429,9 +428,6 @@ class GroupAPI:
 			"comment": comment,
 			"enabled": enabled
 		}
-
-		if len(names) > 0:
-			group["name"] = names
 
 		return requests.post(self._pi.url + "/groups", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
