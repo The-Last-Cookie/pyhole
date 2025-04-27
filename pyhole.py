@@ -454,7 +454,12 @@ class GroupAPI:
 		:param: new_name: Name to change to
 		:returns: JSON object
 		"""
-		group = self.get_group(old_name)
+		try:
+			group = self.get_group(old_name)["groups"][0]
+		except KeyError:
+			print("Group not found")
+			return {}
+
 		group["name"] = new_name
 
 		return requests.put(self._pi.url + f"/groups/{old_name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
@@ -467,7 +472,12 @@ class GroupAPI:
 		:param: comment: New comment for the group
 		:returns: JSON object
 		"""
-		group = self.get_group(name)
+		try:
+			group = self.get_group(name)["groups"][0]
+		except KeyError:
+			print("Group not found")
+			return {}
+
 		group["comment"] = comment
 
 		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
@@ -479,7 +489,12 @@ class GroupAPI:
 		:param: name: Group name
 		:returns: JSON object
 		"""
-		group = self.get_group(name)
+		try:
+			group = self.get_group(name)["groups"][0]
+		except KeyError:
+			print("Group not found")
+			return {}
+
 		group["enabled"] = True
 
 		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
@@ -491,7 +506,12 @@ class GroupAPI:
 		:param: name: Group name
 		:returns: JSON object
 		"""
-		group = self.get_group(name)
+		try:
+			group = self.get_group(name)["groups"][0]
+		except KeyError:
+			print("Group not found")
+			return {}
+
 		group["enabled"] = False
 
 		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
@@ -578,7 +598,7 @@ class DomainAPI:
 		"""
 		Add a new domain.
 
-		A "UNIQUE constraint failed" error indicates that a group with the same name already exists.
+		A "UNIQUE constraint failed" error indicates that a domain with the same name already exists.
 
 		When adding a regular expression, ensure the request body is properly JSON-escaped.
 
