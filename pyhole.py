@@ -547,9 +547,136 @@ class DomainAPI:
 	def __init__(self, pi):
 		self._pi = pi
 
-	def domain(self):
-		pass
+	def delete_domains(self, domains: list) -> bool:
+		"""
+		Delete domains.
 
+		Domains: A list of domain objects where each object contains the following data:
+		:param: item: Domain name
+		:param: type: allow|deny
+		:param: kind: exact|regex
+		:returns: bool
+		"""
+		req = requests.post(self._pi.url + "/domains:batchDelete", json=domains, headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Domains deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request. Unexpected request body format.")
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Domains not found")
+
+		return False
+
+	def add_domain(self, domain: str, type: str, kind: str, comment="", groups=[0], enabled=True):
+		"""
+		Add a new domain.
+
+		A "UNIQUE constraint failed" error indicates that a group with the same name already exists.
+
+		When adding a regular expression, ensure the request body is properly JSON-escaped.
+
+		:param: domain: Name of the domain
+		:param: type: allow|deny
+		:param: kind: exact|regex
+		:param: comment: Comment for describing the domain
+		:param: groups: List of integers describing which groups the domain is assigned to
+		:param: enabled: Whether the domain is enabled
+		:returns: JSON object
+		"""
+		payload = {
+			"domain": domain,
+			"comment": comment,
+			"groups": groups,
+			"enabled": enabled
+		}
+
+		return requests.post(self._pi.url + f"/domains/{type}/{kind}", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def search_domains(self, domain=None, type=None, kind=None):
+		"""
+		Get domains of a certain characteristic. Set any of the parameter to narrow down the search.
+
+		:param: (optional) domain: Name of the domain
+		:param: (optional) type: allow|deny
+		:param: (optional) kind: exact|regex
+		:returns: JSON object
+		"""
+		endpoint = "/domains"
+
+		if type is not None:
+			if type == "allow" or type == "deny":
+				endpoint = endpoint + f"/{type}"
+			else:
+				print("Domain type has an unexpected format")
+				return
+
+		if kind is not None:
+			if kind == "exact" or kind == "regex":
+				endpoint = endpoint + f"{kind}"
+			else:
+				print("Domain kind has an unexpected format")
+			return
+
+		if domain:
+			endpoint = endpoint + f"/{domain}"
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_domain(self, domain: str, type: str, kind: str) -> bool:
+		"""
+		Delete domain
+
+		:param: domain: Name of the domain
+		:param: type: allow|deny
+		:param: kind: exact|regex
+		"""
+		req = requests.delete(self._pi.url + f"/domains/{type}/{kind}/{domain}", headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Domain deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request: " + req.json()["error"]["message"])
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Domain not found")
+
+		return False
+
+	def update_domain(self, domain: dict, new_values: dict):
+		# TODO: This endpoints' description is confusing
+		"""
+		Update values of a domain.
+
+		:param: domain: Current domain object. Be careful of specifying every value, otherwise they will be overwritten. These are the values that should be included:
+		:param: domain: Name of the domain
+		:param: type: allow|deny
+		:param: kind: exact|regex
+		:param: comment: Comment for describing the domain
+		:param: groups: List of integers describing which groups the domain is assigned to
+		:param: enabled: Whether the domain is enabled
+
+		:param: new_values: New values that should be changed. Parameters that are not contained in this object will not be changed.
+		:returns: JSON object
+		"""
+		old_domain = domain["domain"]
+		old_type = domain["type"]
+		old_kind = domain["kind"]
+
+		for key, value in new_values.items():
+			domain[key] = value
+
+		return requests.put(self._pi.url + f"/domains/{old_type}/{old_kind}/{old_domain}", json=domain, headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
 class ClientAPI:
 	def __init__(self, pi):
