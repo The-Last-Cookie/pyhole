@@ -698,9 +698,132 @@ class DomainAPI:
 
 		return requests.put(self._pi.url + f"/domains/{old_type}/{old_kind}/{old_domain}", json=domain, headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
+
 class ClientAPI:
 	def __init__(self, pi):
 		self._pi = pi
 
-	def get_url(self):
-		print(self._pi.url)
+	def add_client(self, address: str, comment="", groups=[0]):
+		"""
+		Add a new client.
+
+		A "UNIQUE constraint failed" error indicates that a client with the same address already exists.
+
+		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
+		:return: JSON object
+		"""
+		payload = {
+			"client": address,
+			"comment": comment,
+			"groups": groups
+		}
+
+		return requests.post(self._pi.url + "/clients", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_clients(self, clients: list) -> bool:
+		"""
+		Delete clients.
+		:param: clients: A list of client names
+		:returns: bool
+		"""
+		payload = []
+		for client in clients:
+			payload.append({"item": client})
+
+		req = requests.post(self._pi.url + "/clients:batchDelete", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Clients deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request. Unexpected request body format.")
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Clients not found")
+
+		return False
+
+	def get_suggestions(self):
+		"""
+		Get client suggestions of unconfigured clients.
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/clients/_suggestions", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_client(self, address=None):
+		"""
+		Get a specific client. By default, this returns all clients.
+
+		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
+		:returns: JSON object
+		"""
+		endpoint = "/clients"
+
+		if address is not None:
+			endpoint = endpoint + f"/{address}"
+
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_client(self, address: str) -> bool:
+		"""
+		Delete client.
+
+		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
+		"""
+		req = requests.delete(self._pi.url + f"/clients/{address}", headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Client deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request: " + req.json()["error"]["message"])
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Client not found")
+
+		return False
+
+	def update_client_comment(self, address: str, comment: str):
+		"""
+		Update client comment.
+
+		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
+		:param: comment: New comment
+		:returns: JSON object
+		"""
+		try:
+			client = self.get_client(address)["clients"][0]
+		except KeyError:
+			print("Client not found")
+			return {}
+
+		client["comment"] = comment
+
+		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def update_groups(self, address: str, groups: list):
+		"""
+		Update groups a client is assigned to.
+
+		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
+		:param: groups: New groups
+		:returns: JSON object
+		"""
+		try:
+			client = self.get_client(address)["clients"][0]
+		except KeyError:
+			print("Client not found")
+			return {}
+
+		client["groups"] = groups
+
+		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=CERT_BUNDLE).json()
