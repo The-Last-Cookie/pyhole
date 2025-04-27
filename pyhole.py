@@ -97,13 +97,13 @@ class Pihole:
 			utils.set_config("password", password)
 
 			payload = {
-  				"config": {
-    				"webserver": {
-      					"api": {
+				"config": {
+					"webserver": {
+						"api": {
 							"app_pwhash": hash
 						}
-    				}
-  				}
+					}
+				}
 			}
 
 			requests.patch(self.url + "/config", headers=self._headers, json=payload, verify=CERT_BUNDLE)
