@@ -17,6 +17,7 @@ class Pihole:
 		self.domains = DomainAPI(self)
 		self.clients = ClientAPI(self)
 		self.lists = ListAPI(self)
+		self.ftl = FtlAPI(self)
 
 	def is_auth_required(self):
 		"""
@@ -1021,3 +1022,206 @@ class ListAPI:
 		list["enabled"] = False
 
 		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+
+class FtlAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+	def get_endpoints(self):
+		"""
+		Get list of available API endpoints
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/endpoints", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_client_info(self):
+		"""
+		Get information about requesting client
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/client", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_database_info(self):
+		"""
+		Get information about long-term database
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/database", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_ftl_info(self):
+		"""
+		Get info about various ftl parameters
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/ftl", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_host_info(self):
+		"""
+		Get info about various host parameters
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/host", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_login_info(self):
+		"""
+		Login page related information
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/login", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_messages(self):
+		"""
+		Get Pi-hole diagnosis messages
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/messages", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_message(self, message: int) -> bool:
+		"""
+		Delete Pi-hole diagnosis messages
+
+		:param: message: Message ID
+		"""
+		req = requests.delete(self._pi.url + f"/info/messages/{message}", headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Message deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request: " + req.json()["error"]["message"])
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Message not found")
+
+		return False
+
+	def get_message_count(self):
+		"""
+		Get count of Pi-hole diagnosis messages
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/messages/count", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_metrics(self):
+		"""
+		Get metrics info about the DNS and DHCP metrics
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/metrics", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_sensor_info(self):
+		"""
+		Get info about various sensors
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/sensors", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_system_info(self):
+		"""
+		Get info about various system parameters
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/system", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_version(self):
+		"""
+		Get Pi-hole version
+
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/info/version", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_dnsmasq_log(self, next_id=None):
+		"""
+		Get DNS log content (dnsmasq)
+
+		:param: (optional) next_id: Every successful request will return a _nextID_. This ID can be used on the next request to only get lines which were added after the last request. This makes periodic polling for new log lines easy as no check for duplicated log lines is necessary. The expected behavior for an immediate re-request of a log line with the same ID is an empty response. As soon as the next message arrived, this will be included in your request and _nextID_ is incremented by one.
+		:returns: JSON object
+		"""
+		endpoint = "/logs/dnsmasq"
+		if type(next_id) == int:
+			endpoint = endpoint + f"?nextID={next_id}"
+
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_ftl_log(self, next_id=None):
+		"""
+		Get FTL log content
+
+		:param: (optional) next_id: Every successful request will return a _nextID_. This ID can be used on the next request to only get lines which were added after the last request. This makes periodic polling for new log lines easy as no check for duplicated log lines is necessary. The expected behavior for an immediate re-request of a log line with the same ID is an empty response. As soon as the next message arrived, this will be included in your request and _nextID_ is incremented by one.
+		:returns: JSON object
+		"""
+		endpoint = "/logs/ftl"
+		if type(next_id) == int:
+			endpoint = endpoint + f"?nextID={next_id}"
+
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_webserver_log(self, next_id=None):
+		"""
+		Get webserver log content (CivetWeb HTTP server)
+
+		:param: (optional) next_id: Every successful request will return a _nextID_. This ID can be used on the next request to only get lines which were added after the last request. This makes periodic polling for new log lines easy as no check for duplicated log lines is necessary. The expected behavior for an immediate re-request of a log line with the same ID is an empty response. As soon as the next message arrived, this will be included in your request and _nextID_ is incremented by one.
+		:returns: JSON object
+		"""
+		endpoint = "/logs/webserver"
+		if type(next_id) == int:
+			endpoint = endpoint + f"?nextID={next_id}"
+
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+
+class TeleporterAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+	def export_settings(self):
+		pass
+
+	def import_settings(self):
+		pass
+
+
+class NetworkAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+
+class ActionAPI:
+	def __init__(self, pi):
+		self._pi = pi
+# ActionAPI: Add info to README documentation that this requires the action checkbox in the web UI to be set
+
+
+class PaddAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+
+class ConfigAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+
+class DhcpAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+
+# pi.get_docs() add in Pi-hole class
