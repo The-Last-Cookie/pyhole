@@ -16,6 +16,7 @@ class Pihole:
 		self.groups = GroupAPI(self)
 		self.domains = DomainAPI(self)
 		self.clients = ClientAPI(self)
+		self.lists = ListAPI(self)
 
 	def is_auth_required(self):
 		"""
@@ -827,3 +828,196 @@ class ClientAPI:
 		client["groups"] = groups
 
 		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+
+class ListAPI:
+	def __init__(self, pi):
+		self._pi = pi
+
+	def add_list(self, address: str, type: str, comment="", groups=[0], enabled=True):
+		"""
+		Add new list.
+
+		A "UNIQUE constraint failed" error indicates that a client with the same address already exists.
+
+		:param: address: Address of the list
+		:param: type: allow | block
+		:param: comment: Comment for the list
+		:param: groups: Groups that the list is assigned to
+		:param: enabled: Whether the list is enabled
+		:return: JSON object
+		"""
+		payload = {
+			"address": address,
+			"type": type,
+			"comment": comment,
+			"groups": groups,
+			"enabled": enabled
+		}
+
+		return requests.post(self._pi.url + "/lists", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_lists(self, lists: list) -> bool:
+		"""
+		Delete several lists.
+
+		Each list object has the following keys:
+		:param: item: List address
+		:param: type: allow | block
+		"""
+		req = requests.post(self._pi.url + "/lists:batchDelete", json=lists, headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Lists deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request. Unexpected request body format.")
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Lists not found")
+
+		return False
+
+	def get_lists(self, address: str, type=None):
+		"""
+		Get lists. By default, all lists will be returned.
+
+		:param: address: Address of the list
+		:param: (optional) type: allow | block
+		"""
+		endpoint = "/lists/" + address
+
+		if type == "allow" or type == "block":
+			endpoint = endpoint + "?type=" + type
+
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_list(self, address: str):
+		"""
+		Delete a list.
+
+		:param: address: Address of the list
+		"""
+		req = requests.delete(self._pi.url + f"/lists/{address}", headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("List deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request. Unexpected request format.")
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("List not found")
+
+		return False
+
+	def search(self, address: str, partial=False, count=20, debug=False):
+		"""
+		Search lists for domains.
+
+		There is a hard limit set in FTL (default: 10,000) to ensure that the response does not get too large.
+
+		:param: address: Domain to search for
+		:param: (optional) partial: Whether partial results should be returned. If activated, ABP results are not returned.
+		:param: (optional) count: Number of maximum results to return
+		:param: (optional) debug: Add debug information to the response
+		"""
+		endpoint = f"/search/{address}?partial={partial}&N={count}&debug={debug}"
+
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def update_list_comment(self, address: str, comment: str):
+		"""
+		Update comment of list
+
+		:param: address: List address
+		:param: comment: Comment of the list
+		:returns: JSON object
+		"""
+		try:
+			list = self.get_lists(address)["lists"][0]
+		except KeyError:
+			print("List not found")
+			return {}
+
+		list["comment"] = comment
+
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def update_type_list(self, address: str, type: str):
+		"""
+		Update type of list
+
+		:param: address: List address
+		:param: type: allow | block
+		:returns: JSON object
+		"""
+		try:
+			list = self.get_lists(address)["lists"][0]
+		except KeyError:
+			print("List not found")
+			return {}
+
+		list["type"] = type
+
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def update_groups(self, address: str, groups: list):
+		"""
+		Update groups assigned to list
+
+		:param: address: List address
+		:param: groups: List of integers representing the group IDs
+		:returns: JSON object
+		"""
+		try:
+			list = self.get_lists(address)["lists"][0]
+		except KeyError:
+			print("List not found")
+			return {}
+
+		list["groups"] = groups
+
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def enable(self, address: str):
+		"""
+		Enable list
+
+		:param: address: List address
+		:returns: JSON object
+		"""
+		try:
+			list = self.get_lists(address)["lists"][0]
+		except KeyError:
+			print("List not found")
+			return {}
+
+		list["enabled"] = True
+
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def disable(self, address: str):
+		"""
+		Disable list
+
+		:param: address: List address
+		:returns: JSON object
+		"""
+		try:
+			list = self.get_lists(address)["lists"][0]
+		except KeyError:
+			print("List not found")
+			return {}
+
+		list["enabled"] = False
+
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
