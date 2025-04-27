@@ -459,6 +459,19 @@ class GroupAPI:
 
 		return requests.put(self._pi.url + f"/groups/{old_name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
+	def update_group_comment(self, name: str, comment: str):
+		"""
+		Modify the comment of a group
+
+		:param: name: Name of the group
+		:param: comment: New comment for the group
+		:returns: JSON object
+		"""
+		group = self.get_group(name)
+		group["comment"] = comment
+
+		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
 	def enable_group(self, name: str):
 		"""
 		Enable group.
