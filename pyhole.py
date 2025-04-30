@@ -19,6 +19,7 @@ class Pihole:
 		self.lists = ListAPI(self)
 		self.ftl = FtlAPI(self)
 		self.teleporter = TeleporterAPI(self)
+		self.network = NetworkAPI(self)
 
 	def is_auth_required(self):
 		"""
@@ -1228,6 +1229,74 @@ class TeleporterAPI:
 class NetworkAPI:
 	def __init__(self, pi):
 		self._pi = pi
+
+	def get_devices(self, max_devices=10, max_addresses=3):
+		"""
+		Get info about the devices in your local network as seen by your Pi-hole.
+
+		Devices are ordered by when your Pi-hole has received the last query from this device (most recent first).
+
+		:param: (optional) max_devices: Maximum number of devices to show
+		:param: (optional) max_addresses: Maximum number of addresses to show per device
+		:returns: JSON object
+		"""
+		endpoint = f"/network/devices?max_devices={max_devices}&max_addresses={max_addresses}"
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_device(self, id: int) -> bool:
+		"""
+		Delete a device from the network table
+
+		This will also remove all associated IP addresses and hostnames.
+
+		:retuns: bool
+		"""
+		req = requests.delete(self._pi.url + f"/network/devices/{id}", headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Device deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request: " + req.json()["error"]["message"])
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Device not found")
+
+		return False
+
+	def get_gateway(self, detailed=False):
+		"""
+		Get info about the gateway of your Pi-hole
+
+		:param: (optional) detailed: May include detailed information about the individual interfaces and routes depending on the interface type and state
+		:returns: JSON object
+		"""
+		endpoint = f"/network/gateway?detailed={detailed}"
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_interfaces(self, detailed=False):
+		"""
+		Get info about the interfaces of your Pi-hole
+
+		:param: (optional) detailed: May include detailed information about the individual interfaces and routes depending on the interface type and state
+		:returns: JSON object
+		"""
+		endpoint = f"/network/interfaces?detailed={detailed}"
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def get_routes(self, detailed=False):
+		"""
+		Get info about the routes of your Pi-hole
+
+		:param: (optional) detailed: May include detailed information about the individual interfaces and routes depending on the interface type and state
+		:returns: JSON object
+		"""
+		endpoint = f"/network/routes?detailed={detailed}"
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
 
 class ActionAPI:
