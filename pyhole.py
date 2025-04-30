@@ -18,6 +18,7 @@ class Pihole:
 		self.clients = ClientAPI(self)
 		self.lists = ListAPI(self)
 		self.ftl = FtlAPI(self)
+		self.teleporter = TeleporterAPI(self)
 
 	def is_auth_required(self):
 		"""
@@ -1191,11 +1192,37 @@ class TeleporterAPI:
 	def __init__(self, pi):
 		self._pi = pi
 
-	def export_settings(self):
-		pass
+	def export_settings(self, archive: str, chunk_size=128) -> None:
+		"""
+		Request an archived copy of your Pi-hole's current configuration as a zip file.
 
-	def import_settings(self):
-		pass
+		:param: archive: Path to save the zip file to (e.g. teleporter.zip)
+		:param: (optional) chunk_size: Chunk size to write in one iteration
+		"""
+		req = requests.get(self._pi.url + "/teleporter", stream=True, headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 401:
+			print("Authentication required")
+			return
+
+		with open(archive, 'wb') as fd:
+			for chunk in req.iter_content(chunk_size=chunk_size):
+				fd.write(chunk)
+
+		print("Settings successfully exported")
+
+	def import_settings(self, archive: str):
+		"""
+		Import Pi-hole settings from a zip archive.
+
+		This function requires "webserver.api.app_sudo" to be _True_.
+
+		:param: archive: Path to zip archive
+		:returns: JSON object
+		"""
+		file = open(archive, mode="rb")
+		form_data = {"file": ('teleporter.zip', file, 'multipart/form-data')}
+		return requests.post(self._pi.url + "/teleporter", files=form_data, headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
 
 class NetworkAPI:
