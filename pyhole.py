@@ -21,6 +21,9 @@ class Pihole:
 		self.teleporter = TeleporterAPI(self)
 		self.network = NetworkAPI(self)
 		self.actions = ActionAPI(self)
+		self.padd = PaddAPI(self)
+		self.config = ConfigAPI(self)
+		self.dhcp = DhcpAPI(self)
 
 	def is_auth_required(self):
 		"""
@@ -1351,15 +1354,117 @@ class PaddAPI:
 	def __init__(self, pi):
 		self._pi = pi
 
+	def get_data(self, full=False):
+		"""
+		Get data for PADD
+
+		:param: (optional) full: Return full data
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/padd", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
 
 class ConfigAPI:
 	def __init__(self, pi):
 		self._pi = pi
+
+	def get(self, element=None, detailed=False):
+		"""
+		Get entire Pi-hole configuration or one specific element.
+
+		:param: (optional) element: Set to only get one specific element.
+		:returns: JSON object
+		"""
+		endpoint = "/config"
+
+		if element:
+			endpoint = endpoint + f"/{element}"
+
+		if detailed:
+			endpoint = endpoint + f"?detailed={detailed}"
+
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def patch(self, config: dict):
+		"""
+		Update one or several configurations at once
+
+		:returns: JSON object
+		"""
+		return requests.patch(self._pi.url + "/config", data=config, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def set(self, element: str, value: str):
+		"""
+		Set Pi-hole config
+
+		:returns: None if successful, JSON object otherwise
+		"""
+		req = requests.put(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 201:
+			print("Config successfully set")
+			return
+
+		return req.json()
+
+	def delete(self, element: str, value: str) -> bool:
+		"""
+		Delete Pi-hole config
+
+		:returns: bool
+		"""
+		req = requests.delete(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		
+		if req.status_code == 204:
+			print("Config deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request: " + req.json()["error"]["message"])
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Config not found")
+
+		return False
 
 
 class DhcpAPI:
 	def __init__(self, pi):
 		self._pi = pi
 
+	def get_leases(self):
+		"""
+		Get currently active DHCP leases
 
-# pi.get_docs() add in Pi-hole class
+		:returns: JSON object
+		"""
+		return requests.get(self._pi.url + "/dhcp/leases", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def delete_lease(self, ip: str):
+		"""
+		Remove active DHCP lease
+		
+		Managing DHCP leases is only possible when the DHCP server is enabled.
+
+		:params: ip: IP address of the lease to remove
+		:returns: bool
+		"""
+		req = requests.delete(self._pi.url + f"/dhcp/leases/{ip}", headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 204:
+			print("Lease deleted")
+			return True
+
+		if req.status_code == 400:
+			print("Bad request: " + req.json()["error"]["message"])
+
+		if req.status_code == 401:
+			print("Authentication required")
+
+		if req.status_code == 404:
+			print("Lease not found")
+
+		return False
