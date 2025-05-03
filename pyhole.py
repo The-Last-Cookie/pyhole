@@ -20,6 +20,7 @@ class Pihole:
 		self.ftl = FtlAPI(self)
 		self.teleporter = TeleporterAPI(self)
 		self.network = NetworkAPI(self)
+		self.actions = ActionAPI(self)
 
 	def is_auth_required(self):
 		"""
@@ -1302,7 +1303,48 @@ class NetworkAPI:
 class ActionAPI:
 	def __init__(self, pi):
 		self._pi = pi
-# ActionAPI: Add info to README documentation that this requires the action checkbox in the web UI to be set
+
+	def flush_network_table(self):
+		"""
+		Flush the network table (ARP)
+
+		For this to work, the webserver.api.allow_destructive setting needs to be true.
+
+		:returns: JSON object
+		"""
+		return requests.post(self._pi.url + "/action/flush/arp", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def flush_dns_logs(self):
+		"""
+		Flush DNS logs
+
+		:returns: JSON object
+		"""
+		return requests.post(self._pi.url + "/action/flush/logs", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+
+	def run_gravity(self):
+		"""
+		Run gravity
+
+		Update Pi-hole's adlists by running pihole -g. The output of the process is streamed with chunked encoding.
+
+		:returns: Streamed chunks (generator) if successful, JSON object otherwise
+		"""
+		req = requests.post(self._pi.url + "/action/gravity", stream=True, headers=self._pi._headers, verify=CERT_BUNDLE)
+
+		if req.status_code == 200:
+			for chunk in req.iter_content(chunk_size=128, decode_unicode=True):
+				yield chunk
+		else:
+			return req.json()
+
+	def restart_dns(self):
+		"""
+		Restart pihole-FTL
+
+		:returns: JSON object
+		"""
+		return requests.post(self._pi.url + "/action/restartdns", headers=self._pi._headers, verify=CERT_BUNDLE).json()
 
 
 class PaddAPI:
