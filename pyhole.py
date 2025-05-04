@@ -1,15 +1,15 @@
 import requests
 
-import utils
-
-CERT_BUNDLE = utils.get_config('cert_bundle')
+from utils import ConnectionConfig
 
 
 class Pihole:
 	def __init__(self, url: str):
 		self.url = url
 
+		self._connection = ConnectionConfig("config.json")
 		self._headers = None
+		self._cert_bundle = self._connection.get('cert_bundle')
 
 		self.metrics = MetricAPI(self)
 		self.dns_filter = DnsFilterAPI(self)
@@ -31,7 +31,7 @@ class Pihole:
 
 		Returns: JSON object
 		"""
-		return requests.get(self.url + "/auth", headers=self._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle).json()
 
 	def authenticate(self):
 		"""
@@ -42,13 +42,13 @@ class Pihole:
 		- JSON object
 		"""
 		try:
-			password = utils.get_config("password")
+			password = self._connection.get("password")
 		except KeyError:
 			print("No password provided in config file")
 			return {}
 
 		payload = {"password": password}
-		auth_request = requests.post(self.url + "/auth", json=payload, verify=CERT_BUNDLE)
+		auth_request = requests.post(self.url + "/auth", json=payload, verify=self._cert_bundle)
 
 		if auth_request.status_code == 200:
 			if auth_request.json()['session']['sid'] is None:
@@ -76,7 +76,7 @@ class Pihole:
 
 		:returns: bool
 		"""
-		req = requests.delete(self.url + "/auth", headers=self._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self.url + "/auth", headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 204:
 			print("Current session deleted")
 			return True
@@ -97,12 +97,12 @@ class Pihole:
 		- None if successful
 		- JSON object otherwise
 		"""
-		req = requests.get(self.url + "/auth/app", headers=self._headers, verify=CERT_BUNDLE)
+		req = requests.get(self.url + "/auth/app", headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 200:
 			password = req.json()["app"]["password"]
 			hash = req.json()["app"]["hash"]
 
-			utils.set_config("password", password)
+			self._connection.save("password", password)
 
 			payload = {
 				"config": {
@@ -114,7 +114,7 @@ class Pihole:
 				}
 			}
 
-			requests.patch(self.url + "/config", headers=self._headers, json=payload, verify=CERT_BUNDLE)
+			requests.patch(self.url + "/config", headers=self._headers, json=payload, verify=self._cert_bundle)
 			print("Password created")
 		else:
 			return req.json()
@@ -123,7 +123,7 @@ class Pihole:
 		"""
 		Deletes the session with the given id.
 		"""
-		req = requests.delete(self.url + "/auth/session/" + str(id), headers=self._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self.url + "/auth/session/" + str(id), headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 204:
 			print("Session deleted")
 
@@ -143,7 +143,7 @@ class Pihole:
 
 		Returns: JSON object
 		"""
-		return requests.get(self.url + "/auth/sessions", headers=self._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self.url + "/auth/sessions", headers=self._headers, verify=self._cert_bundle).json()
 
 	def new_totp_credentials(self):
 		"""
@@ -151,7 +151,7 @@ class Pihole:
 
 		:returns: JSON object
 		"""
-		return requests.get(self.url + "/auth/totp", headers=self._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self.url + "/auth/totp", headers=self._headers, verify=self._cert_bundle).json()
 
 
 class MetricAPI:
@@ -164,7 +164,7 @@ class MetricAPI:
 
 		Returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/history", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/history", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_client_history(self, count=5):
 		"""
@@ -177,7 +177,7 @@ class MetricAPI:
 		:param: Number of top clients. If set to 0, all clients will be returned.
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/history/clients?N={count}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/history/clients?N={count}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_long_term_history(self, start: int, end: int):
 		"""
@@ -187,7 +187,7 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/history/clients?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/history/clients?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_long_term_client_history(self, start: int, end: int):
 		"""
@@ -197,7 +197,7 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_queries(self, options={}):
 		# TODO: It is unclear if "from" and "until" are optional or required parameters
@@ -232,13 +232,13 @@ class MetricAPI:
 
 		query_params = query_params.removesuffix("&")
 
-		return requests.get(self._pi.url + endpoint + query_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint + query_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_suggestions(self):
 		"""
 		Get query filter suggestions suitable for _get\_queries_
 		"""
-		return requests.get(self._pi.url + "/queries/suggestions", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/queries/suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_long_term_query_types(self, start: int, end: int):
 		"""
@@ -248,7 +248,7 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/database/query_types?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/stats/database/query_types?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_database_summary(self, start: int, end: int):
 		"""
@@ -258,7 +258,7 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/database/summary?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/stats/database/summary?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_long_term_top_clients(self, start: int, end: int, **kwargs):
 		"""
@@ -276,7 +276,7 @@ class MetricAPI:
 
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + f"/stats/database/top_clients?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/stats/database/top_clients?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_long_term_top_domains(self, start: int, end: int, **kwargs):
 		"""
@@ -294,7 +294,7 @@ class MetricAPI:
 
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + f"/stats/database/top_domains?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/stats/database/top_domains?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_long_term_upstreams(self, start: int, end: int):
 		"""
@@ -304,7 +304,7 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/database/upstreams?from={start}&until={end}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/stats/database/upstreams?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_query_types(self):
 		"""
@@ -312,7 +312,7 @@ class MetricAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/stats/query_types", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/stats/query_types", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_recently_blocked(self, count=1):
 		"""
@@ -321,7 +321,7 @@ class MetricAPI:
 		:param: Number of blocked domains
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/recent_blocked?{count}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/stats/recent_blocked?{count}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_summary(self):
 		"""
@@ -329,7 +329,7 @@ class MetricAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/stats/summary", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/stats/summary", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_top_clients(self, **kwargs):
 		"""
@@ -345,7 +345,7 @@ class MetricAPI:
 
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + "/stats/top_clients?" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/stats/top_clients?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_top_domains(self, **kwargs):
 		"""
@@ -361,7 +361,7 @@ class MetricAPI:
 
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + "/stats/top_domains?" + optional_params, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/stats/top_domains?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_upstreams(self):
 		"""
@@ -369,7 +369,7 @@ class MetricAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/stats/upstreams", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/stats/upstreams", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class DnsFilterAPI:
@@ -382,7 +382,7 @@ class DnsFilterAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/dns/blocking", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/dns/blocking", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def enable(self, timer: int):
 		"""
@@ -402,7 +402,7 @@ class DnsFilterAPI:
 			"timer": timer
 		}
 
-		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def disable(self, timer: int):
 		"""
@@ -422,7 +422,7 @@ class DnsFilterAPI:
 			"timer": timer
 		}
 
-		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class GroupAPI:
@@ -430,10 +430,10 @@ class GroupAPI:
 		self._pi = pi
 
 	def get_groups(self):
-		return requests.get(self._pi.url + "/groups", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/groups", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_group(self, name: str):
-		return requests.get(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def create_group(self, name: str, comment="", enabled=True):
 		"""
@@ -452,7 +452,7 @@ class GroupAPI:
 			"enabled": enabled
 		}
 
-		return requests.post(self._pi.url + "/groups", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/groups", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def rename_group(self, old_name: str, new_name: str):
 		"""
@@ -470,7 +470,7 @@ class GroupAPI:
 
 		group["name"] = new_name
 
-		return requests.put(self._pi.url + f"/groups/{old_name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + f"/groups/{old_name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def update_group_comment(self, name: str, comment: str):
 		"""
@@ -488,7 +488,7 @@ class GroupAPI:
 
 		group["comment"] = comment
 
-		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def enable_group(self, name: str):
 		"""
@@ -505,7 +505,7 @@ class GroupAPI:
 
 		group["enabled"] = True
 
-		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def disable_group(self, name: str):
 		"""
@@ -522,7 +522,7 @@ class GroupAPI:
 
 		group["enabled"] = False
 
-		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_groups(self, *names) -> bool:
 		"""
@@ -535,7 +535,7 @@ class GroupAPI:
 		for name in names:
 			groups.append({"item": name})
 
-		req = requests.post(self._pi.url + "/groups:batchDelete", json=groups, headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.post(self._pi.url + "/groups:batchDelete", json=groups, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Groups deleted")
@@ -556,7 +556,7 @@ class GroupAPI:
 		:param: name: Group name
 		:returns: bool
 		"""
-		req = requests.delete(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Group deleted")
@@ -585,7 +585,7 @@ class DomainAPI:
 		:param: kind: exact|regex
 		:returns: bool
 		"""
-		req = requests.post(self._pi.url + "/domains:batchDelete", json=domains, headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.post(self._pi.url + "/domains:batchDelete", json=domains, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Domains deleted")
@@ -625,7 +625,7 @@ class DomainAPI:
 			"enabled": enabled
 		}
 
-		return requests.post(self._pi.url + f"/domains/{type}/{kind}", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + f"/domains/{type}/{kind}", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def search_domains(self, domain=None, type=None, kind=None):
 		"""
@@ -654,7 +654,7 @@ class DomainAPI:
 
 		if domain:
 			endpoint = endpoint + f"/{domain}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_domain(self, domain: str, type: str, kind: str) -> bool:
 		"""
@@ -664,7 +664,7 @@ class DomainAPI:
 		:param: type: allow|deny
 		:param: kind: exact|regex
 		"""
-		req = requests.delete(self._pi.url + f"/domains/{type}/{kind}/{domain}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/domains/{type}/{kind}/{domain}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Domain deleted")
@@ -704,7 +704,7 @@ class DomainAPI:
 		for key, value in new_values.items():
 			domain[key] = value
 
-		return requests.put(self._pi.url + f"/domains/{old_type}/{old_kind}/{old_domain}", json=domain, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + f"/domains/{old_type}/{old_kind}/{old_domain}", json=domain, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class ClientAPI:
@@ -726,7 +726,7 @@ class ClientAPI:
 			"groups": groups
 		}
 
-		return requests.post(self._pi.url + "/clients", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/clients", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_clients(self, clients: list) -> bool:
 		"""
@@ -738,7 +738,7 @@ class ClientAPI:
 		for client in clients:
 			payload.append({"item": client})
 
-		req = requests.post(self._pi.url + "/clients:batchDelete", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.post(self._pi.url + "/clients:batchDelete", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Clients deleted")
@@ -761,7 +761,7 @@ class ClientAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/clients/_suggestions", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/clients/_suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_client(self, address=None):
 		"""
@@ -775,7 +775,7 @@ class ClientAPI:
 		if address is not None:
 			endpoint = endpoint + f"/{address}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_client(self, address: str) -> bool:
 		"""
@@ -783,7 +783,7 @@ class ClientAPI:
 
 		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
 		"""
-		req = requests.delete(self._pi.url + f"/clients/{address}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/clients/{address}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Client deleted")
@@ -816,7 +816,7 @@ class ClientAPI:
 
 		client["comment"] = comment
 
-		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def update_groups(self, address: str, groups: list):
 		"""
@@ -834,7 +834,7 @@ class ClientAPI:
 
 		client["groups"] = groups
 
-		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class ListAPI:
@@ -862,7 +862,7 @@ class ListAPI:
 			"enabled": enabled
 		}
 
-		return requests.post(self._pi.url + "/lists", json=payload, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/lists", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_lists(self, lists: list) -> bool:
 		"""
@@ -872,7 +872,7 @@ class ListAPI:
 		:param: item: List address
 		:param: type: allow | block
 		"""
-		req = requests.post(self._pi.url + "/lists:batchDelete", json=lists, headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.post(self._pi.url + "/lists:batchDelete", json=lists, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Lists deleted")
@@ -901,7 +901,7 @@ class ListAPI:
 		if type == "allow" or type == "block":
 			endpoint = endpoint + "?type=" + type
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_list(self, address: str):
 		"""
@@ -909,7 +909,7 @@ class ListAPI:
 
 		:param: address: Address of the list
 		"""
-		req = requests.delete(self._pi.url + f"/lists/{address}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/lists/{address}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("List deleted")
@@ -939,7 +939,7 @@ class ListAPI:
 		"""
 		endpoint = f"/search/{address}?partial={partial}&N={count}&debug={debug}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def update_list_comment(self, address: str, comment: str):
 		"""
@@ -957,7 +957,7 @@ class ListAPI:
 
 		list["comment"] = comment
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def update_type_list(self, address: str, type: str):
 		"""
@@ -975,7 +975,7 @@ class ListAPI:
 
 		list["type"] = type
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def update_groups(self, address: str, groups: list):
 		"""
@@ -993,7 +993,7 @@ class ListAPI:
 
 		list["groups"] = groups
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def enable(self, address: str):
 		"""
@@ -1010,7 +1010,7 @@ class ListAPI:
 
 		list["enabled"] = True
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def disable(self, address: str):
 		"""
@@ -1027,7 +1027,7 @@ class ListAPI:
 
 		list["enabled"] = False
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class FtlAPI:
@@ -1040,7 +1040,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/endpoints", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/endpoints", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_client_info(self):
 		"""
@@ -1048,7 +1048,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/client", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/client", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_database_info(self):
 		"""
@@ -1056,7 +1056,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/database", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/database", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_ftl_info(self):
 		"""
@@ -1064,7 +1064,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/ftl", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/ftl", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_host_info(self):
 		"""
@@ -1072,7 +1072,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/host", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/host", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_login_info(self):
 		"""
@@ -1080,7 +1080,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/login", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/login", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_messages(self):
 		"""
@@ -1088,7 +1088,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/messages", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/messages", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_message(self, message: int) -> bool:
 		"""
@@ -1096,7 +1096,7 @@ class FtlAPI:
 
 		:param: message: Message ID
 		"""
-		req = requests.delete(self._pi.url + f"/info/messages/{message}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/info/messages/{message}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Message deleted")
@@ -1119,7 +1119,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/messages/count", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/messages/count", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_metrics(self):
 		"""
@@ -1127,7 +1127,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/metrics", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/metrics", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_sensor_info(self):
 		"""
@@ -1135,7 +1135,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/sensors", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/sensors", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_system_info(self):
 		"""
@@ -1143,7 +1143,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/system", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/system", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_version(self):
 		"""
@@ -1151,7 +1151,7 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/version", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/info/version", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_dnsmasq_log(self, next_id=None):
 		"""
@@ -1164,7 +1164,7 @@ class FtlAPI:
 		if type(next_id) == int:
 			endpoint = endpoint + f"?nextID={next_id}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_ftl_log(self, next_id=None):
 		"""
@@ -1177,7 +1177,7 @@ class FtlAPI:
 		if type(next_id) == int:
 			endpoint = endpoint + f"?nextID={next_id}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_webserver_log(self, next_id=None):
 		"""
@@ -1190,7 +1190,7 @@ class FtlAPI:
 		if type(next_id) == int:
 			endpoint = endpoint + f"?nextID={next_id}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class TeleporterAPI:
@@ -1204,7 +1204,7 @@ class TeleporterAPI:
 		:param: archive: Path to save the zip file to (e.g. teleporter.zip)
 		:param: (optional) chunk_size: Chunk size to write in one iteration
 		"""
-		req = requests.get(self._pi.url + "/teleporter", stream=True, headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.get(self._pi.url + "/teleporter", stream=True, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 401:
 			print("Authentication required")
@@ -1227,7 +1227,7 @@ class TeleporterAPI:
 		"""
 		file = open(archive, mode="rb")
 		form_data = {"file": ('teleporter.zip', file, 'multipart/form-data')}
-		return requests.post(self._pi.url + "/teleporter", files=form_data, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/teleporter", files=form_data, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class NetworkAPI:
@@ -1245,7 +1245,7 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/devices?max_devices={max_devices}&max_addresses={max_addresses}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_device(self, id: int) -> bool:
 		"""
@@ -1255,7 +1255,7 @@ class NetworkAPI:
 
 		:retuns: bool
 		"""
-		req = requests.delete(self._pi.url + f"/network/devices/{id}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/network/devices/{id}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Device deleted")
@@ -1280,7 +1280,7 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/gateway?detailed={detailed}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_interfaces(self, detailed=False):
 		"""
@@ -1290,7 +1290,7 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/interfaces?detailed={detailed}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_routes(self, detailed=False):
 		"""
@@ -1300,7 +1300,7 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/routes?detailed={detailed}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class ActionAPI:
@@ -1315,7 +1315,7 @@ class ActionAPI:
 
 		:returns: JSON object
 		"""
-		return requests.post(self._pi.url + "/action/flush/arp", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/action/flush/arp", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def flush_dns_logs(self):
 		"""
@@ -1323,7 +1323,7 @@ class ActionAPI:
 
 		:returns: JSON object
 		"""
-		return requests.post(self._pi.url + "/action/flush/logs", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/action/flush/logs", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def run_gravity(self):
 		"""
@@ -1333,7 +1333,7 @@ class ActionAPI:
 
 		:returns: Streamed chunks (generator) if successful, JSON object otherwise
 		"""
-		req = requests.post(self._pi.url + "/action/gravity", stream=True, headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.post(self._pi.url + "/action/gravity", stream=True, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			for chunk in req.iter_content(chunk_size=128, decode_unicode=True):
@@ -1347,7 +1347,7 @@ class ActionAPI:
 
 		:returns: JSON object
 		"""
-		return requests.post(self._pi.url + "/action/restartdns", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.post(self._pi.url + "/action/restartdns", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class PaddAPI:
@@ -1361,7 +1361,7 @@ class PaddAPI:
 		:param: (optional) full: Return full data
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/padd", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/padd", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 
 class ConfigAPI:
@@ -1383,7 +1383,7 @@ class ConfigAPI:
 		if detailed:
 			endpoint = endpoint + f"?detailed={detailed}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def patch(self, config: dict):
 		"""
@@ -1391,7 +1391,7 @@ class ConfigAPI:
 
 		:returns: JSON object
 		"""
-		return requests.patch(self._pi.url + "/config", data=config, headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.patch(self._pi.url + "/config", data=config, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def set(self, element: str, value: str):
 		"""
@@ -1399,7 +1399,7 @@ class ConfigAPI:
 
 		:returns: None if successful, JSON object otherwise
 		"""
-		req = requests.put(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.put(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 201:
 			print("Config successfully set")
@@ -1413,7 +1413,7 @@ class ConfigAPI:
 
 		:returns: bool
 		"""
-		req = requests.delete(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 		
 		if req.status_code == 204:
 			print("Config deleted")
@@ -1441,7 +1441,7 @@ class DhcpAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/dhcp/leases", headers=self._pi._headers, verify=CERT_BUNDLE).json()
+		return requests.get(self._pi.url + "/dhcp/leases", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def delete_lease(self, ip: str):
 		"""
@@ -1452,7 +1452,7 @@ class DhcpAPI:
 		:params: ip: IP address of the lease to remove
 		:returns: bool
 		"""
-		req = requests.delete(self._pi.url + f"/dhcp/leases/{ip}", headers=self._pi._headers, verify=CERT_BUNDLE)
+		req = requests.delete(self._pi.url + f"/dhcp/leases/{ip}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Lease deleted")

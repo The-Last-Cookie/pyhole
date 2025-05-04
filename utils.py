@@ -1,22 +1,25 @@
 import json
 
-CONFIG_FILE = "config.json"
 
-def get_config(config_name: str):
-	config = None
-	with open(CONFIG_FILE) as file:
-		content = file.read()
-		config = json.loads(content)
+class ConnectionConfig:
+	def __init__(self, path: str):
+		self.path = path
 
-	return config[config_name]
+	def get(self, config_name: str):
+		config = None
+		with open(self.path) as file:
+			content = file.read()
+			config = json.loads(content)
 
-def set_config(config_name: str, value) -> None:
-	config = None
+		return config[config_name]
 
-	with open(CONFIG_FILE, mode='r') as file:
-		content = file.read()
-		config = json.loads(content)
-		config[config_name] = value
+	def save(self, config_name: str, value) -> None:
+		config = None
 
-	with open(CONFIG_FILE, mode='w') as file:
-		file.write(json.dumps(config))
+		with open(self.path, mode='r') as file:
+			content = file.read()
+			config = json.loads(content)
+			config[config_name] = value
+
+		with open(self.path, mode='w') as file:
+			file.write(json.dumps(config))
