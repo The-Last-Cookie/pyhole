@@ -1,15 +1,14 @@
 import requests
-
-from utils import ConnectionConfig
+import json
 
 
 class Pihole:
-	def __init__(self, url: str):
+	def __init__(self, url: str, config_file="config.json"):
 		self.url = url
 
-		self._connection = ConnectionConfig("config.json")
+		self._config_file = config_file
 		self._headers = None
-		self._cert_bundle = self._connection.get('cert_bundle')
+		self._cert_bundle = self._get_config('cert_bundle')
 
 		self.metrics = MetricAPI(self)
 		self.dns_filter = DnsFilterAPI(self)
@@ -24,6 +23,25 @@ class Pihole:
 		self.padd = PaddAPI(self)
 		self.config = ConfigAPI(self)
 		self.dhcp = DhcpAPI(self)
+
+	def _get_config(self, config_name: str):
+		config = None
+		with open(self._config_file) as file:
+			content = file.read()
+			config = json.loads(content)
+
+		return config[config_name]
+
+	def _save_config(self, config_name: str, value) -> None:
+		config = None
+
+		with open(self._config_file, mode='r') as file:
+			content = file.read()
+			config = json.loads(content)
+			config[config_name] = value
+
+		with open(self._config_file, mode='w') as file:
+			file.write(json.dumps(config))
 
 	def is_auth_required(self):
 		"""
@@ -42,7 +60,7 @@ class Pihole:
 		- JSON object
 		"""
 		try:
-			password = self._connection.get("password")
+			password = self._get_config("password")
 		except KeyError:
 			print("No password provided in config file")
 			return {}
@@ -102,7 +120,7 @@ class Pihole:
 			password = req.json()["app"]["password"]
 			hash = req.json()["app"]["hash"]
 
-			self._connection.save("password", password)
+			self._save_config("password", password)
 
 			payload = {
 				"config": {
