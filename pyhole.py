@@ -1,14 +1,19 @@
 import requests
-import json
 
 
 class Pihole:
-	def __init__(self, url: str, config_file="config.json"):
+	def __init__(self, url: str, cert_bundle: str):
+		"""
+		Initiates an instance for calling the API
+
+		:params: url: URL to Pi-hole
+		:params: cert_bundle: Path to the .crt file of the Pi-hole (not the webserver certificate) for SSL validation. Set this to _False_ if you do not want to use SSL.
+		"""
+
 		self.url = url
 
-		self._config_file = config_file
 		self._headers = None
-		self._cert_bundle = self._get_config('cert_bundle')
+		self._cert_bundle = cert_bundle
 
 		self.metrics = MetricAPI(self)
 		self.dns_filter = DnsFilterAPI(self)
@@ -24,25 +29,6 @@ class Pihole:
 		self.config = ConfigAPI(self)
 		self.dhcp = DhcpAPI(self)
 
-	def _get_config(self, config_name: str):
-		config = None
-		with open(self._config_file) as file:
-			content = file.read()
-			config = json.loads(content)
-
-		return config[config_name]
-
-	def _save_config(self, config_name: str, value) -> None:
-		config = None
-
-		with open(self._config_file, mode='r') as file:
-			content = file.read()
-			config = json.loads(content)
-			config[config_name] = value
-
-		with open(self._config_file, mode='w') as file:
-			file.write(json.dumps(config))
-
 	def is_auth_required(self):
 		"""
 		Check if authentication is required.
@@ -51,20 +37,15 @@ class Pihole:
 		"""
 		return requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle).json()
 
-	def authenticate(self):
+	def authenticate(self, password: str):
 		"""
 		Creates a session token via the password provided in the config file.
 
+		:params: password: Password used for authentication. Can be a user or app password.
 		:returns:
 		- None if successful
 		- JSON object
 		"""
-		try:
-			password = self._get_config("password")
-		except KeyError:
-			print("No password provided in config file")
-			return {}
-
 		payload = {"password": password}
 		auth_request = requests.post(self.url + "/auth", json=payload, verify=self._cert_bundle)
 
@@ -120,7 +101,7 @@ class Pihole:
 			password = req.json()["app"]["password"]
 			hash = req.json()["app"]["hash"]
 
-			self._save_config("password", password)
+			# TODO: return password
 
 			payload = {
 				"config": {
