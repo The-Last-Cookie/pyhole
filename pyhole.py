@@ -576,7 +576,7 @@ class DomainAPI:
 
 	def delete_domains(self, domains: list) -> bool:
 		"""
-		Delete domains.
+		Delete domains from Domain tab.
 
 		Domains: A list of domain objects where each object contains the following data:
 		:param: item: Domain name
@@ -603,7 +603,7 @@ class DomainAPI:
 
 	def add_domain(self, domain: str, type: str, kind: str, comment="", groups=[0], enabled=True):
 		"""
-		Add a new domain.
+		Add a new domain to the Domain tab.
 
 		A "UNIQUE constraint failed" error indicates that a domain with the same name already exists.
 
@@ -657,7 +657,7 @@ class DomainAPI:
 
 	def delete_domain(self, domain: str, type: str, kind: str) -> bool:
 		"""
-		Delete domain
+		Delete domain from Domain tab.
 
 		:param: domain: Name of the domain
 		:param: type: allow|deny
@@ -764,7 +764,9 @@ class ClientAPI:
 
 	def get_client(self, address=None):
 		"""
-		Get a specific client. By default, this returns all clients.
+		Get a specific client.
+		
+		By default, this returns all clients configured in the Client tab. Clients not added in this tab will not be returned by this endpoint. Refer to Network endpoint.
 
 		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
 		:returns: JSON object
@@ -778,7 +780,7 @@ class ClientAPI:
 
 	def delete_client(self, address: str) -> bool:
 		"""
-		Delete client.
+		Delete client from the Client tab.
 
 		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
 		"""
@@ -891,6 +893,8 @@ class ListAPI:
 	def get_lists(self, address: str, type=None):
 		"""
 		Get lists. By default, all lists will be returned.
+
+		If _address_ is defined and the list is not present in the database, the returned data is empty.
 
 		:param: address: Address of the list
 		:param: (optional) type: allow | block
