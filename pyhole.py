@@ -90,18 +90,18 @@ class Pihole:
 
 	def create_app_password(self):
 		"""
-		Creates a password to authenticate against the API instead of the user password. Overwrites the password defined in the config file.
+		Creates a new password to authenticate against the API instead of the user password.
+
+		This password is only returned once and needs to be saved in order to authenticate again.
 
 		Returns:
-		- None if successful
+		- Application password if successful
 		- JSON object otherwise
 		"""
 		req = requests.get(self.url + "/auth/app", headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 200:
 			password = req.json()["app"]["password"]
 			hash = req.json()["app"]["hash"]
-
-			# TODO: return password
 
 			payload = {
 				"config": {
@@ -115,6 +115,8 @@ class Pihole:
 
 			requests.patch(self.url + "/config", headers=self._headers, json=payload, verify=self._cert_bundle)
 			print("Password created")
+
+			return password
 		else:
 			return req.json()
 
