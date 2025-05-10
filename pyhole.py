@@ -1409,7 +1409,7 @@ class ConfigAPI:
 
 		:returns: JSON object
 		"""
-		return requests.patch(self._pi.url + "/config", data=config, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		return requests.patch(self._pi.url + "/config", json=config, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def set(self, element: str, value: str):
 		"""
