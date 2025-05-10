@@ -39,7 +39,7 @@ class Pihole:
 
 	def authenticate(self, password: str):
 		"""
-		Creates a session token via the password provided in the config file.
+		Creates a session token via a password.
 
 		:params: password: Password used for authentication. Can be a user or app password.
 		:returns:
@@ -53,7 +53,7 @@ class Pihole:
 			if auth_request.json()['session']['sid'] is None:
 				print("Authentication not required")
 				self._headers = None
-				return {}
+				return
 
 			self._headers = {
 				"X-FTL-SID": auth_request.json()['session']['sid'],
