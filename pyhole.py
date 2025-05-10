@@ -161,6 +161,8 @@ class Pihole:
 		"""
 		Suggest new TOTP credentials for two-factor authentication (2FA).
 
+		_Note: 2FA for authentication is not supported in this library._
+
 		:returns: JSON object
 		"""
 		return requests.get(self.url + "/auth/totp", headers=self._headers, verify=self._cert_bundle).json()
