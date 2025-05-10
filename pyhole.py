@@ -29,11 +29,24 @@ class Pihole:
 		self.config = ConfigAPI(self)
 		self.dhcp = DhcpAPI(self)
 
-	def is_auth_required(self):
+	def is_auth_required(self) -> bool:
 		"""
 		Check if authentication is required.
 
-		Returns: JSON object
+		:returns: bool
+		"""
+		req = requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle)
+
+		if req.status_code == 200:
+			return False
+		else:
+			return True
+
+	def get_current_session(self):
+		"""
+		Get current session status.
+
+		:returns: JSON object
 		"""
 		return requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle).json()
 
@@ -62,12 +75,10 @@ class Pihole:
 			print("Authentication successful")
 		elif auth_request.status_code == 429:
 			self._headers = None
-			print("Rate limit exceeded")
-			return auth_request.json()
+			raise RateLimitExceededException("Too many requests", response=auth_request.json())
 		else:
 			self._headers = None
-			print("Authentication not successful")
-			return auth_request.json()
+			raise AuthenticationRequiredException("Password is not correct", response=auth_request.json())
 
 	def delete_current_session(self) -> bool:
 		"""
