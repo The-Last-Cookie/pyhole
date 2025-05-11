@@ -561,12 +561,13 @@ class DnsFilterAPI:
 	def __init__(self, pi):
 		self._pi = pi
 
-	def is_active(self):
+	def get_state(self):
 		"""
 		Get current blocking state.
 
 		:returns: JSON object
 		"""
+		# TODO: Introduce BlockingStateEnum?
 		return requests.get(self._pi.url + "/dns/blocking", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def enable(self, timer: int):
