@@ -211,14 +211,13 @@ class MetricAPI:
 		"""
 		return requests.get(self._pi.url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
-	def get_queries(self, options={}):
-		# TODO: It is unclear if "from" and "until" are optional or required parameters
+	def get_queries(self, filter={}):
 		"""
 		Request query details.
 
 		By default, this API callback returns the most recent 100 queries. This can be changed using the parameter _length_.
 
-		:param: options: Filter options. See also Pi-hole API documentation.
+		:param: filter: Filter options. See also Pi-hole API documentation.
 		:returns: JSON object
 
 		:param: (optional) from [integer]: Get queries from...
@@ -239,9 +238,10 @@ class MetricAPI:
 		endpoint = "/queries?"
 
 		query_params = ""
-		for filter, value in options.items():
-			query_params = query_params + filter + "=" + str(value) + "&"
+		for keyword, value in filter.items():
+			query_params = query_params + keyword + "=" + str(value) + "&"
 
+		# Mitigate potential problems with single ampersand at the end
 		query_params = query_params.removesuffix("&")
 
 		return requests.get(self._pi.url + endpoint + query_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
@@ -286,6 +286,7 @@ class MetricAPI:
 		for filter, value in kwargs.items():
 			optional_params = optional_params + filter + "=" + str(value) + "&"
 
+		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
 		return requests.get(self._pi.url + f"/stats/database/top_clients?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
@@ -304,6 +305,7 @@ class MetricAPI:
 		for filter, value in kwargs.items():
 			optional_params = optional_params + filter + "=" + str(value) + "&"
 
+		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
 		return requests.get(self._pi.url + f"/stats/database/top_domains?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
@@ -355,6 +357,7 @@ class MetricAPI:
 		for filter, value in kwargs.items():
 			optional_params = optional_params + filter + "=" + str(value) + "&"
 
+		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
 		return requests.get(self._pi.url + "/stats/top_clients?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
@@ -371,6 +374,7 @@ class MetricAPI:
 		for filter, value in kwargs.items():
 			optional_params = optional_params + filter + "=" + str(value) + "&"
 
+		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
 		return requests.get(self._pi.url + "/stats/top_domains?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
