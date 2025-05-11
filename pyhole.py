@@ -105,16 +105,15 @@ class Pihole:
 
 		This password is only returned once and needs to be saved in order to authenticate again.
 
-		Returns:
-		- Application password if successful
-		- JSON object otherwise
+		:returns: Application password if successful
 		"""
 		req = requests.get(self.url + "/auth/app", headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 200:
-			password = req.json()["app"]["password"]
-			hash = req.json()["app"]["hash"]
+			application = req.json()["app"]
+			password = application["password"]
+			hash = application["hash"]
 
-			payload = {
+			new_config = {
 				"config": {
 					"webserver": {
 						"api": {
@@ -124,9 +123,8 @@ class Pihole:
 				}
 			}
 
-			requests.patch(self.url + "/config", headers=self._headers, json=payload, verify=self._cert_bundle)
+			self.config.patch(new_config)
 			print("Password created")
-
 			return password
 		else:
 			return req.json()
