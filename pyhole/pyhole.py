@@ -568,7 +568,15 @@ class DnsFilterAPI:
 		:returns: JSON object
 		"""
 		# TODO: Introduce BlockingStateEnum?
-		return requests.get(self._pi.url + "/dns/blocking", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/dns/blocking", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def enable(self, timer: int):
 		"""
@@ -588,7 +596,15 @@ class DnsFilterAPI:
 			"timer": timer
 		}
 
-		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def disable(self, timer: int):
 		"""
@@ -608,7 +624,15 @@ class DnsFilterAPI:
 			"timer": timer
 		}
 
-		return requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/dns/blocking", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class GroupAPI:
