@@ -55,22 +55,20 @@ class Pihole:
 		Creates a session token via a password. This session token is valid for the maximum session time (5 minutes by default). If the session token has not expired yet, the validity of the token will be extended to the maximum session time on any interaction with the API.
 
 		:params: password: Password used for authentication. Can be a user or app password.
-		:returns:
-		- None if successful
-		- JSON object
 		"""
 		payload = {"password": password}
 		auth_request = requests.post(self.url + "/auth", json=payload, verify=self._cert_bundle)
+		session = auth_request.json()['session']
 
 		if auth_request.status_code == 200:
-			if auth_request.json()['session']['sid'] is None:
+			if session['sid'] is None:
 				print("Authentication not required")
 				self._headers = None
 				return
 
 			self._headers = {
-				"X-FTL-SID": auth_request.json()['session']['sid'],
-				"X-FTL-CSRF": auth_request.json()['session']['csrf']
+				"X-FTL-SID": session['sid'],
+				"X-FTL-CSRF": session['csrf']
 			}
 			print("Authentication successful")
 		elif auth_request.status_code == 429:
