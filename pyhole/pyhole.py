@@ -1,5 +1,7 @@
 import requests
 
+from .exceptions import ApiError, AuthenticationRequiredException, BadRequestException, ItemNotFoundException, RateLimitExceededException
+
 
 class Pihole:
 	def __init__(self, url: str, cert_bundle: str):
@@ -47,8 +49,17 @@ class Pihole:
 		Get current session status.
 
 		:returns: JSON object
+		:raises: AuthenticationRequiredException
 		"""
-		return requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle).json()
+		req = requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def authenticate(self, password: str):
 		"""
@@ -71,12 +82,17 @@ class Pihole:
 				"X-FTL-CSRF": session['csrf']
 			}
 			print("Authentication successful")
+		elif auth_request.status_code == 400:
+			self._headers = None
+			raise BadRequestException("Password must be of type 'string'")
+		elif auth_request.status_code == 401:
+			self._headers = None
+			raise AuthenticationRequiredException("Password is not correct")
 		elif auth_request.status_code == 429:
 			self._headers = None
-			raise RateLimitExceededException("Too many requests", response=auth_request.json())
+			raise RateLimitExceededException("Too many requests - " + session['message'])
 		else:
-			self._headers = None
-			raise AuthenticationRequiredException("Password is not correct", response=auth_request.json())
+			raise ApiError("API request failed due to unknown reasons")
 
 	def delete_current_session(self) -> bool:
 		"""
@@ -90,10 +106,10 @@ class Pihole:
 			return True
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("No active session")
+			raise ItemNotFoundException("No active session. Authentication not required.")
 
 		return False
 
@@ -124,8 +140,10 @@ class Pihole:
 			self.config.patch(new_config)
 			print("Password created")
 			return password
+		elif req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
 		else:
-			return req.json()
+			raise ApiError("API request failed due to unknown reasons")
 
 	def delete_session(self, id: int):
 		"""
@@ -133,25 +151,34 @@ class Pihole:
 		"""
 		req = requests.delete(self.url + "/auth/session/" + str(id), headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 204:
-			print("Session deleted")
+			print("Session '" + str(id) + "' deleted")
 
 		if req.status_code == 400:
-			print("Bad request")
-			return req.json()
+			raise BadRequestException(req.json()["error"]["message"])
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Session not found")
+			raise ItemNotFoundException("Session not found")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_sessions(self):
 		"""
 		Get a list of all sessions.
 
-		Returns: JSON object
+		:returns: JSON object
 		"""
-		return requests.get(self.url + "/auth/sessions", headers=self._headers, verify=self._cert_bundle).json()
+		req = requests.get(self.url + "/auth/sessions", headers=self._headers, verify=self._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def new_totp_credentials(self):
 		"""
@@ -161,7 +188,15 @@ class Pihole:
 
 		:returns: JSON object
 		"""
-		return requests.get(self.url + "/auth/totp", headers=self._headers, verify=self._cert_bundle).json()
+		req = requests.get(self.url + "/auth/totp", headers=self._headers, verify=self._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class MetricAPI:
@@ -172,9 +207,17 @@ class MetricAPI:
 		"""
 		Get activity graph data
 
-		Returns: JSON object
+		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/history", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/history", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_client_history(self, count=5):
 		"""
@@ -187,7 +230,15 @@ class MetricAPI:
 		:param: Number of top clients. If set to 0, all clients will be returned.
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/history/clients?N={count}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/history/clients?N={count}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_long_term_history(self, start: int, end: int):
 		"""
@@ -197,7 +248,15 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/history/database?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/history/database?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_long_term_client_history(self, start: int, end: int):
 		"""
@@ -207,7 +266,15 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_queries(self, filter={}):
 		"""
@@ -242,13 +309,29 @@ class MetricAPI:
 		# Mitigate potential problems with single ampersand at the end
 		query_params = query_params.removesuffix("&")
 
-		return requests.get(self._pi.url + endpoint + query_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint + query_params, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_suggestions(self):
 		"""
 		Get query filter suggestions suitable for _get\_queries_
 		"""
-		return requests.get(self._pi.url + "/queries/suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/queries/suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_long_term_query_types(self, start: int, end: int):
 		"""
@@ -258,7 +341,15 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/database/query_types?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/stats/database/query_types?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_database_summary(self, start: int, end: int):
 		"""
@@ -268,7 +359,15 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/database/summary?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/stats/database/summary?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_long_term_top_clients(self, start: int, end: int, **kwargs):
 		"""
@@ -287,7 +386,15 @@ class MetricAPI:
 		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + f"/stats/database/top_clients?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/stats/database/top_clients?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_long_term_top_domains(self, start: int, end: int, **kwargs):
 		"""
@@ -306,7 +413,15 @@ class MetricAPI:
 		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + f"/stats/database/top_domains?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/stats/database/top_domains?from={start}&until={end}" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_long_term_upstreams(self, start: int, end: int):
 		"""
@@ -316,7 +431,15 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/database/upstreams?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/stats/database/upstreams?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_query_types(self):
 		"""
@@ -324,7 +447,15 @@ class MetricAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/stats/query_types", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/stats/query_types", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_recently_blocked(self, count=1):
 		"""
@@ -333,7 +464,15 @@ class MetricAPI:
 		:param: Number of blocked domains
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/stats/recent_blocked?{count}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/stats/recent_blocked?{count}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_summary(self):
 		"""
@@ -341,7 +480,15 @@ class MetricAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/stats/summary", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/stats/summary", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_top_clients(self, **kwargs):
 		"""
@@ -358,7 +505,15 @@ class MetricAPI:
 		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + "/stats/top_clients?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/stats/top_clients?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_top_domains(self, **kwargs):
 		"""
@@ -375,7 +530,15 @@ class MetricAPI:
 		# Mitigate potential problems with single ampersand at the end
 		optional_params = optional_params.removesuffix("&")
 
-		return requests.get(self._pi.url + "/stats/top_domains?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/stats/top_domains?" + optional_params, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_upstreams(self):
 		"""
@@ -383,7 +546,15 @@ class MetricAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/stats/upstreams", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/stats/upstreams", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class DnsFilterAPI:
