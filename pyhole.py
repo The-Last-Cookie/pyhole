@@ -199,7 +199,7 @@ class MetricAPI:
 		:param: Unix timestamp from when the data should be requested
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + f"/history/clients?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		return requests.get(self._pi.url + f"/history/database?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
 	def get_long_term_client_history(self, start: int, end: int):
 		"""
@@ -236,7 +236,7 @@ class MetricAPI:
 		:param: (optional) dnssec [string]: Filter by specific DNSSEC status (SECURE, INSECURE, ...)
 		:param: (optional) disk [bool]: Load queries from on-disk database rather than from in-memory
 		"""
-		endpoint = "/history/database/clients?"
+		endpoint = "/queries?"
 
 		query_params = ""
 		for filter, value in options.items():
