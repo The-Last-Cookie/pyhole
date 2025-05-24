@@ -640,10 +640,37 @@ class GroupAPI:
 		self._pi = pi
 
 	def get_groups(self):
-		return requests.get(self._pi.url + "/groups", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		"""
+		Get all groups
+
+		:returns: JSON object
+		"""
+		req = requests.get(self._pi.url + "/groups", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_group(self, name: str):
-		return requests.get(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		"""
+		Get specific group
+
+		:returns: JSON object
+		"""
+		req = requests.get(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			# TODO: When handling took, return group directly (or None if not found)
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def create_group(self, name: str, comment="", enabled=True):
 		"""
@@ -662,7 +689,20 @@ class GroupAPI:
 			"enabled": enabled
 		}
 
-		return requests.post(self._pi.url + "/groups", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/groups", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 201:
+			return req.json()
+
+		if req.status_code == 400:
+			# "Invalid request body data (no valid JSON)" is not possible
+			# because the body structure is not controlable by the user
+			raise UniqueConstraintException(req.json()['error']['message'])
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def rename_group(self, old_name: str, new_name: str):
 		"""
@@ -673,14 +713,22 @@ class GroupAPI:
 		:returns: JSON object
 		"""
 		try:
+			# FIXME: When handling took, change to "if group:"
 			group = self.get_group(old_name)["groups"][0]
 		except KeyError:
-			print("Group not found")
-			return {}
+			raise ItemNotFoundException(f"Group '{old_name}' not found")
 
 		group["name"] = new_name
 
-		return requests.put(self._pi.url + f"/groups/{old_name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + f"/groups/{old_name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def update_group_comment(self, name: str, comment: str):
 		"""
