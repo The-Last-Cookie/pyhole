@@ -35,6 +35,8 @@ class Pihole:
 		"""
 		Check if authentication is required.
 
+		If no login is required for the server, this will also return _False_.
+
 		:returns: bool
 		"""
 		req = requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle)
