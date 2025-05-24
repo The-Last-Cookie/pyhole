@@ -94,7 +94,7 @@ class Pihole:
 		else:
 			raise ApiError("API request failed due to unknown reasons")
 
-	def delete_current_session(self) -> bool:
+	def delete_current_session(self):
 		"""
 		Delete the current session.
 
@@ -103,7 +103,6 @@ class Pihole:
 		req = requests.delete(self.url + "/auth", headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 204:
 			print("Current session deleted")
-			return True
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -111,7 +110,7 @@ class Pihole:
 		if req.status_code == 404:
 			raise ItemNotFoundException("No active session. Authentication not required.")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def create_app_password(self):
 		"""
@@ -150,8 +149,9 @@ class Pihole:
 		Deletes the session with the given id.
 		"""
 		req = requests.delete(self.url + "/auth/session/" + str(id), headers=self._headers, verify=self._cert_bundle)
+
 		if req.status_code == 204:
-			print("Session '" + str(id) + "' deleted")
+			print(f"Session '{str(id)}' deleted")
 
 		if req.status_code == 400:
 			raise BadRequestException(req.json()["error"]["message"])
@@ -696,7 +696,7 @@ class GroupAPI:
 
 		if req.status_code == 400:
 			# "Invalid request body data (no valid JSON)" is not possible
-			# because the body structure is not controlable by the user
+			# because the body structure is not controllable by the user
 			raise UniqueConstraintException(req.json()['error']['message'])
 
 		if req.status_code == 401:
