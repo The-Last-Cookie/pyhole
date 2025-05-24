@@ -321,7 +321,7 @@ class MetricAPI:
 
 	def get_suggestions(self):
 		"""
-		Get query filter suggestions suitable for _get\_queries_
+		Get query filter suggestions suitable for _get_queries_
 		"""
 		req = requests.get(self._pi.url + "/queries/suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
