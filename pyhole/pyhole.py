@@ -97,8 +97,6 @@ class Pihole:
 	def delete_current_session(self):
 		"""
 		Delete the current session.
-
-		:returns: bool
 		"""
 		req = requests.delete(self.url + "/auth", headers=self._headers, verify=self._cert_bundle)
 		if req.status_code == 204:
@@ -741,12 +739,19 @@ class GroupAPI:
 		try:
 			group = self.get_group(name)["groups"][0]
 		except KeyError:
-			print("Group not found")
-			return {}
+			raise ItemNotFoundException(f"Group '{name}' not found")
 
 		group["comment"] = comment
 
-		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def enable_group(self, name: str):
 		"""
@@ -758,12 +763,19 @@ class GroupAPI:
 		try:
 			group = self.get_group(name)["groups"][0]
 		except KeyError:
-			print("Group not found")
-			return {}
+			raise ItemNotFoundException(f"Group '{name}' not found")
 
 		group["enabled"] = True
 
-		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def disable_group(self, name: str):
 		"""
@@ -775,19 +787,25 @@ class GroupAPI:
 		try:
 			group = self.get_group(name)["groups"][0]
 		except KeyError:
-			print("Group not found")
-			return {}
+			raise ItemNotFoundException(f"Group '{name}' not found")
 
 		group["enabled"] = False
 
-		return requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
-	def delete_groups(self, *names) -> bool:
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def delete_groups(self, *names):
 		"""
 		Delete groups by name.
 
 		:param: name: Group names
-		:returns: bool
 		"""
 		groups = []
 		for name in names:
@@ -797,36 +815,33 @@ class GroupAPI:
 
 		if req.status_code == 204:
 			print("Groups deleted")
-			return True
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Groups not found")
+			raise ItemNotFoundException("Groups not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
-	def delete_group(self, name: str) -> bool:
+	def delete_group(self, name: str):
 		"""
 		Delete group by name.
 
 		:param: name: Group name
-		:returns: bool
 		"""
 		req = requests.delete(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
-			print("Group deleted")
-			return True
+			print(f"Group '{name}' deleted")
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("Authentication required")
 
 		if req.status_code == 404:
-			print("Group not found")
+			raise ItemNotFoundException(f"Group '{name}' not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class DomainAPI:
