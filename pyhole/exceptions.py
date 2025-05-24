@@ -27,6 +27,16 @@ class BadRequestException(ApiError):
         return self.message
 
 
+class DataFormatException(ApiError):
+    """Unexpected data format, e.g. input too long"""
+    def __init__(self, message, response={}):
+        self.message = message
+        self.response = response
+
+    def __str__(self):
+        return self.message
+
+
 class UniqueConstraintException(ApiError):
     """Database error"""
     def __init__(self, message, response={}):

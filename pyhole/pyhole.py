@@ -1,6 +1,6 @@
 import requests
 
-from .exceptions import ApiError, AuthenticationRequiredException, BadRequestException, UniqueConstraintException,ItemNotFoundException, RateLimitExceededException
+from .exceptions import ApiError, AuthenticationRequiredException, BadRequestException, DataFormatException, UniqueConstraintException,ItemNotFoundException, RateLimitExceededException
 
 
 class Pihole:
