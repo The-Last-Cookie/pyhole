@@ -913,19 +913,11 @@ class DomainAPI:
 		"""
 		endpoint = "/domains"
 
-		if type is not None:
-			if type == "allow" or type == "deny":
-				endpoint = endpoint + f"/{type}"
-			else:
-				print("Domain type has an unexpected format")
-				return
+		if type == "allow" or type == "deny":
+			endpoint = endpoint + f"/{type}"
 
-		if kind is not None:
-			if kind == "exact" or kind == "regex":
-				endpoint = endpoint + f"{kind}"
-			else:
-				print("Domain kind has an unexpected format")
-			return
+		if kind == "exact" or kind == "regex":
+			endpoint = endpoint + f"/{kind}"
 
 		if domain:
 			endpoint = endpoint + f"/{domain}"
