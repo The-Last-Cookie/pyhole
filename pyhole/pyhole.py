@@ -86,7 +86,7 @@ class Pihole:
 			print("Authentication successful")
 		elif auth_request.status_code == 400:
 			self._headers = None
-			raise BadRequestException("Password must be of type 'string'")
+			raise DataFormatException("Password must be of type 'string'")
 		elif auth_request.status_code == 401:
 			self._headers = None
 			raise AuthenticationRequiredException("Password is not correct")
@@ -692,7 +692,15 @@ class GroupAPI:
 		req = requests.post(self._pi.url + "/groups", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 201:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 group
+				error = json_data['processed']['errors'][0]
+				raise ApiError(f"{error['item']} - {error['error']}")
+
+			# FIXME: When took is handled, return domain instead
+			return json_data
 
 		if req.status_code == 400:
 			# "Invalid request body data (no valid JSON)" is not possible
@@ -850,7 +858,7 @@ class DomainAPI:
 	def __init__(self, pi):
 		self._pi = pi
 
-	def delete_domains(self, domains: list) -> bool:
+	def delete_domains(self, domains: list):
 		"""
 		Delete domains from Domain tab.
 
@@ -858,24 +866,22 @@ class DomainAPI:
 		:param: item: Domain name
 		:param: type: allow|deny
 		:param: kind: exact|regex
-		:returns: bool
 		"""
 		req = requests.post(self._pi.url + "/domains:batchDelete", json=domains, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print("Domains deleted")
-			return True
 
 		if req.status_code == 400:
-			print("Bad request. Unexpected request body format.")
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("Authentication required")
 
 		if req.status_code == 404:
-			print("Domains not found")
+			raise ItemNotFoundException("Domains not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def add_domain(self, domain: str, type: str, kind: str, comment="", groups=[0], enabled=True):
 		"""
@@ -900,7 +906,35 @@ class DomainAPI:
 			"enabled": enabled
 		}
 
-		return requests.post(self._pi.url + f"/domains/{type}/{kind}", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + f"/domains/{type}/{kind}", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 201:
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 group
+				error = json_data['processed']['errors'][0]
+				raise ApiError(f"{error['item']} - {error['error']}")
+
+			# FIXME: When took is handled, return domain instead
+			return json_data
+
+		if req.status_code == 400:
+			error = req.json()['error']
+
+			if error['key'] == "bad_request":
+				raise DataFormatException(error['message'])
+
+			if error['key'] == "database_error":
+				raise UniqueConstraintException(error['message'])
+
+			if error['key'] == "regex_error":
+				raise DataFormatException(f"{error['message']} - {error['hint']}")
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def search_domains(self, domain=None, type=None, kind=None):
 		"""
@@ -921,9 +955,18 @@ class DomainAPI:
 
 		if domain:
 			endpoint = endpoint + f"/{domain}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
-	def delete_domain(self, domain: str, type: str, kind: str) -> bool:
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def delete_domain(self, domain: str, type: str, kind: str):
 		"""
 		Delete domain from Domain tab.
 
@@ -934,22 +977,22 @@ class DomainAPI:
 		req = requests.delete(self._pi.url + f"/domains/{type}/{kind}/{domain}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
-			print("Domain deleted")
-			return True
+			print(f"Domain '{domain}' deleted")
 
 		if req.status_code == 400:
-			print("Bad request: " + req.json()["error"]["message"])
+			raise BadRequestException(req.json()["error"]["message"])
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Domain not found")
+			raise ItemNotFoundException(f"Domain '{domain}' not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def update_domain(self, domain: dict, new_values: dict):
 		# TODO: This endpoints' description is confusing
+		# Think about how to provide this functionality
 		"""
 		Update values of a domain.
 
