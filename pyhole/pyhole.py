@@ -1028,6 +1028,8 @@ class ClientAPI:
 		A "UNIQUE constraint failed" error indicates that a client with the same address already exists.
 
 		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
+		:param: comment: Comment for describing the client
+		:param: groups: List of integers describing which groups the client is assigned to
 		:return: JSON object
 		"""
 		payload = {
@@ -1041,6 +1043,7 @@ class ClientAPI:
 	def delete_clients(self, clients: list) -> bool:
 		"""
 		Delete clients.
+
 		:param: clients: A list of client names
 		:returns: bool
 		"""
