@@ -1,2 +1,2 @@
 from .pyhole import Pihole
-from .exceptions import ApiError, AuthenticationRequiredException, BadRequestException, ItemNotFoundException, RateLimitExceededException
+from .exceptions import ApiError, AuthenticationRequiredException, ForbiddenException, BadRequestException, DataFormatException, UniqueConstraintException,ItemNotFoundException, RateLimitExceededException
