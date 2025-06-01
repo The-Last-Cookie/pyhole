@@ -65,7 +65,7 @@ class Pihole:
 
 	def authenticate(self, password: str):
 		"""
-		Creates a session token via a password. This session token is valid for the maximum session time (5 minutes by default). If the session token has not expired yet, the validity of the token will be extended to the maximum session time on any interaction with the API.
+		Creates a session token via a password. This session token is valid for the maximum session time (30 minutes by default). If the session token has not expired yet, the validity of the token will be extended to the maximum session time on any interaction with the API.
 
 		:params: password: Password used for authentication. Can be a user or app password.
 		"""
