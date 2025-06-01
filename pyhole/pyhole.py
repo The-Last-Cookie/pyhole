@@ -1,6 +1,6 @@
 import requests
 
-from .exceptions import ApiError, AuthenticationRequiredException, BadRequestException, DataFormatException, UniqueConstraintException,ItemNotFoundException, RateLimitExceededException
+from .exceptions import ApiError, AuthenticationRequiredException, ForbiddenException, BadRequestException, DataFormatException, UniqueConstraintException,ItemNotFoundException, RateLimitExceededException
 
 
 class Pihole:
@@ -699,7 +699,7 @@ class GroupAPI:
 				error = json_data['processed']['errors'][0]
 				raise ApiError(f"{error['item']} - {error['error']}")
 
-			# FIXME: When took is handled, return domain instead
+			# FIXME: When took is handled, return group instead
 			return json_data
 
 		if req.status_code == 400:
@@ -811,11 +811,11 @@ class GroupAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def delete_groups(self, *names):
+	def delete_groups(self, names: list):
 		"""
 		Delete groups by name.
 
-		:param: name: Group names
+		:param: names: Group names
 		"""
 		groups = []
 		for name in names:
@@ -825,6 +825,9 @@ class GroupAPI:
 
 		if req.status_code == 204:
 			print("Groups deleted")
+
+		if req.status_code == 400:
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -912,7 +915,7 @@ class DomainAPI:
 			json_data = req.json()
 
 			if json_data['processed']['errors']:
-				# Method never handling more than 1 group
+				# Method never handling more than 1 domain
 				error = json_data['processed']['errors'][0]
 				raise ApiError(f"{error['item']} - {error['error']}")
 
@@ -1038,14 +1041,35 @@ class ClientAPI:
 			"groups": groups
 		}
 
-		return requests.post(self._pi.url + "/clients", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/clients", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
-	def delete_clients(self, clients: list) -> bool:
+		if req.status_code == 201:
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			# FIXME: When took is handled, return client instead
+			return json_data
+
+		if req.status_code == 400:
+			# "Invalid request body data (no valid JSON)" is not possible
+			# because the body structure is not controllable by the user
+			raise UniqueConstraintException(req.json()['error']['message'])
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def delete_clients(self, clients: list):
 		"""
 		Delete clients.
 
 		:param: clients: A list of client names
-		:returns: bool
 		"""
 		payload = []
 		for client in clients:
@@ -1055,18 +1079,17 @@ class ClientAPI:
 
 		if req.status_code == 204:
 			print("Clients deleted")
-			return True
 
 		if req.status_code == 400:
-			print("Bad request. Unexpected request body format.")
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Clients not found")
+			raise ItemNotFoundException("Clients not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_suggestions(self):
 		"""
@@ -1074,12 +1097,21 @@ class ClientAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/clients/_suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/clients/_suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			# TODO: When handling took, return clients directly (or None if not found)
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_client(self, address=None):
 		"""
 		Get a specific client.
-		
+
 		By default, this returns all clients configured in the Client tab. Clients not added in this tab will not be returned by this endpoint. Refer to Network endpoint.
 
 		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
@@ -1087,10 +1119,19 @@ class ClientAPI:
 		"""
 		endpoint = "/clients"
 
-		if address is not None:
+		if address:
 			endpoint = endpoint + f"/{address}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			# TODO: When handling took, return object directly (or None if not found)
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def delete_client(self, address: str) -> bool:
 		"""
@@ -1101,19 +1142,18 @@ class ClientAPI:
 		req = requests.delete(self._pi.url + f"/clients/{address}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
-			print("Client deleted")
-			return True
+			print(f"Client '{address}' deleted")
 
 		if req.status_code == 400:
-			print("Bad request: " + req.json()["error"]["message"])
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Client not found")
+			raise ItemNotFoundException(f"Client '{address}' not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def update_client_comment(self, address: str, comment: str):
 		"""
@@ -1131,7 +1171,15 @@ class ClientAPI:
 
 		client["comment"] = comment
 
-		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def update_groups(self, address: str, groups: list):
 		"""
@@ -1149,7 +1197,15 @@ class ClientAPI:
 
 		client["groups"] = groups
 
-		return requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class ListAPI:
@@ -1177,9 +1233,31 @@ class ListAPI:
 			"enabled": enabled
 		}
 
-		return requests.post(self._pi.url + "/lists", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/lists", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
-	def delete_lists(self, lists: list) -> bool:
+		if req.status_code == 201:
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			# FIXME: When took is handled, return client instead
+			return json_data
+
+		if req.status_code == 400:
+			# "Invalid request body data (no valid JSON)" is not possible
+			# because the body structure is not controllable by the user
+			raise UniqueConstraintException(req.json()['error']['message'])
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def delete_lists(self, lists: list):
 		"""
 		Delete several lists.
 
@@ -1191,18 +1269,17 @@ class ListAPI:
 
 		if req.status_code == 204:
 			print("Lists deleted")
-			return True
 
 		if req.status_code == 400:
-			print("Bad request. Unexpected request body format.")
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Lists not found")
+			raise ItemNotFoundException("Lists not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_lists(self, address: str, type=None):
 		"""
@@ -1218,7 +1295,16 @@ class ListAPI:
 		if type == "allow" or type == "block":
 			endpoint = endpoint + "?type=" + type
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			# TODO: When handling took, return object directly (or None if not found)
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def delete_list(self, address: str):
 		"""
@@ -1229,19 +1315,18 @@ class ListAPI:
 		req = requests.delete(self._pi.url + f"/lists/{address}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
-			print("List deleted")
-			return True
+			print(f"List '{address}' deleted")
 
 		if req.status_code == 400:
-			print("Bad request. Unexpected request format.")
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("List not found")
+			raise ItemNotFoundException(f"List '{address}' not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def search(self, address: str, partial=False, count=20, debug=False):
 		"""
@@ -1256,7 +1341,16 @@ class ListAPI:
 		"""
 		endpoint = f"/search/{address}?partial={partial}&N={count}&debug={debug}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			# TODO: When handling took, return object directly (or None if not found)
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def update_list_comment(self, address: str, comment: str):
 		"""
@@ -1274,7 +1368,15 @@ class ListAPI:
 
 		list["comment"] = comment
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def update_type_list(self, address: str, type: str):
 		"""
@@ -1292,7 +1394,15 @@ class ListAPI:
 
 		list["type"] = type
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def update_groups(self, address: str, groups: list):
 		"""
@@ -1310,7 +1420,15 @@ class ListAPI:
 
 		list["groups"] = groups
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def enable(self, address: str):
 		"""
@@ -1327,7 +1445,15 @@ class ListAPI:
 
 		list["enabled"] = True
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def disable(self, address: str):
 		"""
@@ -1344,7 +1470,15 @@ class ListAPI:
 
 		list["enabled"] = False
 
-		return requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class FtlAPI:
@@ -1357,7 +1491,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/endpoints", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/endpoints", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_client_info(self):
 		"""
@@ -1365,7 +1507,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/client", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/client", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_database_info(self):
 		"""
@@ -1373,7 +1523,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/database", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/database", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_ftl_info(self):
 		"""
@@ -1381,7 +1539,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/ftl", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/ftl", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_host_info(self):
 		"""
@@ -1389,7 +1555,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/host", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/host", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_login_info(self):
 		"""
@@ -1397,7 +1571,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/login", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/login", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_messages(self):
 		"""
@@ -1405,9 +1587,17 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/messages", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/messages", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
-	def delete_message(self, message: int) -> bool:
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def delete_message(self, message: int):
 		"""
 		Delete Pi-hole diagnosis messages
 
@@ -1416,19 +1606,18 @@ class FtlAPI:
 		req = requests.delete(self._pi.url + f"/info/messages/{message}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
-			print("Message deleted")
-			return True
+			print(f"Message {message} deleted")
 
 		if req.status_code == 400:
-			print("Bad request: " + req.json()["error"]["message"])
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Message not found")
+			raise ItemNotFoundException(f"Message {message} not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_message_count(self):
 		"""
@@ -1436,7 +1625,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/messages/count", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/messages/count", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_metrics(self):
 		"""
@@ -1444,7 +1641,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/metrics", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/metrics", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_sensor_info(self):
 		"""
@@ -1452,7 +1657,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/sensors", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/sensors", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_system_info(self):
 		"""
@@ -1460,7 +1673,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/system", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/system", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_version(self):
 		"""
@@ -1468,7 +1689,15 @@ class FtlAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/info/version", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/info/version", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_dnsmasq_log(self, next_id=None):
 		"""
@@ -1481,7 +1710,15 @@ class FtlAPI:
 		if type(next_id) == int:
 			endpoint = endpoint + f"?nextID={next_id}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_ftl_log(self, next_id=None):
 		"""
@@ -1494,7 +1731,15 @@ class FtlAPI:
 		if type(next_id) == int:
 			endpoint = endpoint + f"?nextID={next_id}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_webserver_log(self, next_id=None):
 		"""
@@ -1507,7 +1752,15 @@ class FtlAPI:
 		if type(next_id) == int:
 			endpoint = endpoint + f"?nextID={next_id}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class TeleporterAPI:
@@ -1524,8 +1777,7 @@ class TeleporterAPI:
 		req = requests.get(self._pi.url + "/teleporter", stream=True, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 401:
-			print("Authentication required")
-			return
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		with open(archive, 'wb') as fd:
 			for chunk in req.iter_content(chunk_size=chunk_size):
@@ -1534,6 +1786,7 @@ class TeleporterAPI:
 		print("Settings successfully exported")
 
 	def import_settings(self, archive: str):
+		# FIXME: does api return 403 response when forbidden?
 		"""
 		Import Pi-hole settings from a zip archive.
 
@@ -1544,7 +1797,18 @@ class TeleporterAPI:
 		"""
 		file = open(archive, mode="rb")
 		form_data = {"file": ('teleporter.zip', file, 'multipart/form-data')}
-		return requests.post(self._pi.url + "/teleporter", files=form_data, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/teleporter", files=form_data, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+		
+		if req.status_code == 400:
+			raise BadRequestException("File is not a zip archive")
+		
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+		
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class NetworkAPI:
@@ -1562,32 +1826,37 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/devices?max_devices={max_devices}&max_addresses={max_addresses}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
 
-	def delete_device(self, id: int) -> bool:
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def delete_device(self, id: int):
 		"""
 		Delete a device from the network table
 
 		This will also remove all associated IP addresses and hostnames.
 
-		:retuns: bool
+		:param: id: ID of the device
 		"""
 		req = requests.delete(self._pi.url + f"/network/devices/{id}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
-			print("Device deleted")
-			return True
-
-		if req.status_code == 400:
-			print("Bad request: " + req.json()["error"]["message"])
+			print(f"Device {id} deleted")
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Device not found")
+			raise ItemNotFoundException(f"Device {id} not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_gateway(self, detailed=False):
 		"""
@@ -1597,7 +1866,16 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/gateway?detailed={detailed}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_interfaces(self, detailed=False):
 		"""
@@ -1607,7 +1885,16 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/interfaces?detailed={detailed}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def get_routes(self, detailed=False):
 		"""
@@ -1617,7 +1904,16 @@ class NetworkAPI:
 		:returns: JSON object
 		"""
 		endpoint = f"/network/routes?detailed={detailed}"
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class ActionAPI:
@@ -1628,11 +1924,22 @@ class ActionAPI:
 		"""
 		Flush the network table (ARP)
 
-		For this to work, the webserver.api.allow_destructive setting needs to be true.
+		For this to work, the webserver.api.allow_destructive setting needs to be _True_.
 
 		:returns: JSON object
 		"""
-		return requests.post(self._pi.url + "/action/flush/arp", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/action/flush/arp", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		if req.status_code == 403:
+			raise ForbiddenException("Flushing the network table is not allowed. Check the setting webserver.api.allow_destructive")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def flush_dns_logs(self):
 		"""
@@ -1640,7 +1947,15 @@ class ActionAPI:
 
 		:returns: JSON object
 		"""
-		return requests.post(self._pi.url + "/action/flush/logs", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/action/flush/logs", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def run_gravity(self):
 		"""
@@ -1655,8 +1970,10 @@ class ActionAPI:
 		if req.status_code == 200:
 			for chunk in req.iter_content(chunk_size=128, decode_unicode=True):
 				yield chunk
+		elif req.status_code == 401:
+				raise AuthenticationRequiredException("No valid session token provided")
 		else:
-			return req.json()
+			raise ApiError("API request failed due to unknown reasons")
 
 	def restart_dns(self):
 		"""
@@ -1664,7 +1981,15 @@ class ActionAPI:
 
 		:returns: JSON object
 		"""
-		return requests.post(self._pi.url + "/action/restartdns", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.post(self._pi.url + "/action/restartdns", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class PaddAPI:
@@ -1678,7 +2003,15 @@ class PaddAPI:
 		:param: (optional) full: Return full data
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/padd", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + f"/padd?full={full}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class ConfigAPI:
@@ -1700,7 +2033,15 @@ class ConfigAPI:
 		if detailed:
 			endpoint = endpoint + f"?detailed={detailed}"
 
-		return requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def patch(self, config: dict):
 		"""
@@ -1708,7 +2049,15 @@ class ConfigAPI:
 
 		:returns: JSON object
 		"""
-		return requests.patch(self._pi.url + "/config", json=config, headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.patch(self._pi.url + "/config", json=config, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def set(self, element: str, value: str):
 		"""
@@ -1719,33 +2068,35 @@ class ConfigAPI:
 		req = requests.put(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 201:
-			print("Config successfully set")
-			return
+			print(f"Config '{element}' successfully set")
 
-		return req.json()
+		if req.status_code == 400:
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
-	def delete(self, element: str, value: str) -> bool:
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def delete(self, element: str, value: str):
 		"""
 		Delete Pi-hole config
-
-		:returns: bool
 		"""
 		req = requests.delete(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 		
 		if req.status_code == 204:
-			print("Config deleted")
-			return True
+			print(f"Config '{element}' deleted")
 
 		if req.status_code == 400:
-			print("Bad request: " + req.json()["error"]["message"])
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Config not found")
+			raise ItemNotFoundException(f"Config '{element}' not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
 
 
 class DhcpAPI:
@@ -1758,7 +2109,15 @@ class DhcpAPI:
 
 		:returns: JSON object
 		"""
-		return requests.get(self._pi.url + "/dhcp/leases", headers=self._pi._headers, verify=self._pi._cert_bundle).json()
+		req = requests.get(self._pi.url + "/dhcp/leases", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
 
 	def delete_lease(self, ip: str):
 		"""
@@ -1767,21 +2126,19 @@ class DhcpAPI:
 		Managing DHCP leases is only possible when the DHCP server is enabled.
 
 		:params: ip: IP address of the lease to remove
-		:returns: bool
 		"""
 		req = requests.delete(self._pi.url + f"/dhcp/leases/{ip}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
-			print("Lease deleted")
-			return True
+			print(f"Lease for {ip} deleted")
 
 		if req.status_code == 400:
-			print("Bad request: " + req.json()["error"]["message"])
+			raise BadRequestException("Unexpected request body format.", response=req.json())
 
 		if req.status_code == 401:
-			print("Authentication required")
+			raise AuthenticationRequiredException("No valid session token provided")
 
 		if req.status_code == 404:
-			print("Lease not found")
+			raise ItemNotFoundException(f"Lease for {ip} not found")
 
-		return False
+		raise ApiError("API request failed due to unknown reasons")
