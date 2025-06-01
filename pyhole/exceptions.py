@@ -17,6 +17,16 @@ class AuthenticationRequiredException(ApiError):
         return self.message
 
 
+class ForbiddenException(ApiError):
+    """403 response"""
+    def __init__(self, message, response={}):
+        self.message = message
+        self.response = response
+
+    def __str__(self):
+        return self.message
+
+
 class BadRequestException(ApiError):
     """400 response"""
     def __init__(self, message, response={}):
