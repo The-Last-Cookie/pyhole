@@ -56,7 +56,7 @@ class Pihole:
 		req = requests.get(self.url + "/auth", headers=self._headers, verify=self._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['session']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -173,7 +173,7 @@ class Pihole:
 		req = requests.get(self.url + "/auth/sessions", headers=self._headers, verify=self._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['sessions']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -191,7 +191,7 @@ class Pihole:
 		req = requests.get(self.url + "/auth/totp", headers=self._headers, verify=self._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['totp']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -212,7 +212,7 @@ class MetricAPI:
 		req = requests.get(self._pi.url + "/history", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['history']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -231,9 +231,13 @@ class MetricAPI:
 		:returns: JSON object
 		"""
 		req = requests.get(self._pi.url + f"/history/clients?N={count}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req_json = req.json()
 
 		if req.status_code == 200:
-			return req.json()
+			return {
+				"clients": req_json['clients'],
+				"history": req_json['history']
+			}
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -251,7 +255,7 @@ class MetricAPI:
 		req = requests.get(self._pi.url + f"/history/database?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['history']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -267,9 +271,13 @@ class MetricAPI:
 		:returns: JSON object
 		"""
 		req = requests.get(self._pi.url + f"/history/database/clients?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req_json = req.json()
 
 		if req.status_code == 200:
-			return req.json()
+			return {
+				"clients": req_json['clients'],
+				"history": req_json['history']
+			}
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -326,7 +334,7 @@ class MetricAPI:
 		req = requests.get(self._pi.url + "/queries/suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['suggestions']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -344,7 +352,7 @@ class MetricAPI:
 		req = requests.get(self._pi.url + f"/stats/database/query_types?from={start}&until={end}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['types']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -450,7 +458,7 @@ class MetricAPI:
 		req = requests.get(self._pi.url + "/stats/query_types", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['types']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -648,7 +656,7 @@ class GroupAPI:
 		req = requests.get(self._pi.url + "/groups", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['groups']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -659,13 +667,16 @@ class GroupAPI:
 		"""
 		Get specific group
 
-		:returns: JSON object
+		:returns: JSON object or None if not found
 		"""
 		req = requests.get(self._pi.url + f"/groups/{name}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			# TODO: When handling took, return group directly (or None if not found)
-			return req.json()
+			groups = req.json()['groups']
+			if len(groups) == 1:
+				return groups[0]
+
+			return None
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -699,8 +710,7 @@ class GroupAPI:
 				error = json_data['processed']['errors'][0]
 				raise ApiError(f"{error['item']} - {error['error']}")
 
-			# FIXME: When took is handled, return group instead
-			return json_data
+			return json_data['groups'][0]
 
 		if req.status_code == 400:
 			# "Invalid request body data (no valid JSON)" is not possible
@@ -720,10 +730,9 @@ class GroupAPI:
 		:param: new_name: Name to change to
 		:returns: JSON object
 		"""
-		try:
-			# FIXME: When handling took, change to "if group:"
-			group = self.get_group(old_name)["groups"][0]
-		except KeyError:
+		group = self.get_group(old_name)
+
+		if not group:
 			raise ItemNotFoundException(f"Group '{old_name}' not found")
 
 		group["name"] = new_name
@@ -731,7 +740,14 @@ class GroupAPI:
 		req = requests.put(self._pi.url + f"/groups/{old_name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 group
+				error = json_data['processed']['errors'][0]
+				raise ApiError(f"{error['item']} - {error['error']}")
+
+			return json_data['groups'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -746,9 +762,9 @@ class GroupAPI:
 		:param: comment: New comment for the group
 		:returns: JSON object
 		"""
-		try:
-			group = self.get_group(name)["groups"][0]
-		except KeyError:
+		group = self.get_group(name)
+
+		if not group:
 			raise ItemNotFoundException(f"Group '{name}' not found")
 
 		group["comment"] = comment
@@ -756,7 +772,14 @@ class GroupAPI:
 		req = requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 group
+				error = json_data['processed']['errors'][0]
+				raise ApiError(f"{error['item']} - {error['error']}")
+
+			return json_data['groups'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -770,9 +793,9 @@ class GroupAPI:
 		:param: name: Group name
 		:returns: JSON object
 		"""
-		try:
-			group = self.get_group(name)["groups"][0]
-		except KeyError:
+		group = self.get_group(name)
+
+		if not group:
 			raise ItemNotFoundException(f"Group '{name}' not found")
 
 		group["enabled"] = True
@@ -780,7 +803,14 @@ class GroupAPI:
 		req = requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 group
+				error = json_data['processed']['errors'][0]
+				raise ApiError(f"{error['item']} - {error['error']}")
+
+			return json_data['groups'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -794,9 +824,9 @@ class GroupAPI:
 		:param: name: Group name
 		:returns: JSON object
 		"""
-		try:
-			group = self.get_group(name)["groups"][0]
-		except KeyError:
+		group = self.get_group(name)
+
+		if not group:
 			raise ItemNotFoundException(f"Group '{name}' not found")
 
 		group["enabled"] = False
@@ -804,7 +834,14 @@ class GroupAPI:
 		req = requests.put(self._pi.url + f"/groups/{name}", json=group, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 group
+				error = json_data['processed']['errors'][0]
+				raise ApiError(f"{error['item']} - {error['error']}")
+
+			return json_data['groups'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -919,8 +956,7 @@ class DomainAPI:
 				error = json_data['processed']['errors'][0]
 				raise ApiError(f"{error['item']} - {error['error']}")
 
-			# FIXME: When took is handled, return domain instead
-			return json_data
+			return json_data['domains'][0]
 
 		if req.status_code == 400:
 			error = req.json()['error']
@@ -962,7 +998,7 @@ class DomainAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['domains']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -995,7 +1031,7 @@ class DomainAPI:
 
 	def update_domain(self, domain: dict, new_values: dict):
 		# TODO: This endpoints' description is confusing
-		# Think about how to provide this functionality
+		# Separate into update_domain_<parameter> where parameter is type, kind, comment, and groups as well as enable, disable
 		"""
 		Update values of a domain.
 
@@ -1052,8 +1088,7 @@ class ClientAPI:
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
 
-			# FIXME: When took is handled, return client instead
-			return json_data
+			return json_data['clients'][0]
 
 		if req.status_code == 400:
 			# "Invalid request body data (no valid JSON)" is not possible
@@ -1100,8 +1135,24 @@ class ClientAPI:
 		req = requests.get(self._pi.url + "/clients/_suggestions", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			# TODO: When handling took, return clients directly (or None if not found)
-			return req.json()
+			return req.json()['clients']
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def get_clients(self):
+		"""
+		Return all clients configured in the Client tab. Clients not added in this tab will not be returned by this endpoint. Refer to Network endpoint.
+
+		:returns: JSON object
+		"""
+		endpoint = "/clients"
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()['clients']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1110,12 +1161,10 @@ class ClientAPI:
 
 	def get_client(self, address=None):
 		"""
-		Get a specific client.
-
-		By default, this returns all clients configured in the Client tab. Clients not added in this tab will not be returned by this endpoint. Refer to Network endpoint.
+		Get a specific client configured in the Client tab. Clients not added in this tab will not be returned by this endpoint. Refer to Network endpoint.
 
 		:param: address: IPv4/IPv6 or MAC or hostname or interface (e.g. :eth0)
-		:returns: JSON object
+		:returns: JSON object or None if not found
 		"""
 		endpoint = "/clients"
 
@@ -1125,8 +1174,11 @@ class ClientAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			# TODO: When handling took, return object directly (or None if not found)
-			return req.json()
+			clients = req.json()['clients']
+			if len(clients) == 1:
+				return clients[0]
+
+			return None
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1163,18 +1215,25 @@ class ClientAPI:
 		:param: comment: New comment
 		:returns: JSON object
 		"""
-		try:
-			client = self.get_client(address)["clients"][0]
-		except KeyError:
-			print("Client not found")
-			return {}
+		client = self.get_client(address)
+
+		if not client:
+			raise ItemNotFoundException(f"Client '{address}' not found")
 
 		client["comment"] = comment
 
 		req = requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			return json_data['clients'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1189,18 +1248,25 @@ class ClientAPI:
 		:param: groups: New groups
 		:returns: JSON object
 		"""
-		try:
-			client = self.get_client(address)["clients"][0]
-		except KeyError:
-			print("Client not found")
-			return {}
+		client = self.get_client(address)
+
+		if not client:
+			raise ItemNotFoundException(f"Client '{address}' not found")
 
 		client["groups"] = groups
 
 		req = requests.put(self._pi.url + "/clients/" + client["address"], json=client, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			return json_data['clients'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1244,8 +1310,7 @@ class ListAPI:
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
 
-			# FIXME: When took is handled, return client instead
-			return json_data
+			return json_data['lists'][0]
 
 		if req.status_code == 400:
 			# "Invalid request body data (no valid JSON)" is not possible
@@ -1281,16 +1346,13 @@ class ListAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def get_lists(self, address: str, type=None):
+	def get_lists(self, type=None):
 		"""
-		Get lists. By default, all lists will be returned.
+		Get all lists.
 
-		If _address_ is defined and the list is not present in the database, the returned data is empty.
-
-		:param: address: Address of the list
 		:param: (optional) type: allow | block
 		"""
-		endpoint = "/lists/" + address
+		endpoint = "/lists/"
 
 		if type == "allow" or type == "block":
 			endpoint = endpoint + "?type=" + type
@@ -1298,8 +1360,30 @@ class ListAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			# TODO: When handling took, return object directly (or None if not found)
-			return req.json()
+			return req.json()['lists']
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
+	def get_list(self, address: str):
+		"""
+		Get lists. By default, all lists will be returned.
+
+		:param: address: Address of the list
+
+		:returns: JSON object or None if not found
+		"""
+		endpoint = "/lists/" + address
+		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			lists = req.json()['lists']
+			if len(lists) == 1:
+				return lists[0]
+
+			return None
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1344,8 +1428,7 @@ class ListAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			# TODO: When handling took, return object directly (or None if not found)
-			return req.json()
+			return req.json()['search']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1360,18 +1443,25 @@ class ListAPI:
 		:param: comment: Comment of the list
 		:returns: JSON object
 		"""
-		try:
-			list = self.get_lists(address)["lists"][0]
-		except KeyError:
-			print("List not found")
-			return {}
+		list = self.get_lists(address)
+
+		if not list:
+			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["comment"] = comment
 
 		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			return json_data['lists'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1386,18 +1476,25 @@ class ListAPI:
 		:param: type: allow | block
 		:returns: JSON object
 		"""
-		try:
-			list = self.get_lists(address)["lists"][0]
-		except KeyError:
-			print("List not found")
-			return {}
+		list = self.get_lists(address)
+
+		if not list:
+			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["type"] = type
 
 		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			return json_data['lists'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1412,18 +1509,25 @@ class ListAPI:
 		:param: groups: List of integers representing the group IDs
 		:returns: JSON object
 		"""
-		try:
-			list = self.get_lists(address)["lists"][0]
-		except KeyError:
-			print("List not found")
-			return {}
+		list = self.get_lists(address)
+
+		if not list:
+			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["groups"] = groups
 
 		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			return json_data['lists'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1437,18 +1541,25 @@ class ListAPI:
 		:param: address: List address
 		:returns: JSON object
 		"""
-		try:
-			list = self.get_lists(address)["lists"][0]
-		except KeyError:
-			print("List not found")
-			return {}
+		list = self.get_lists(address)
+
+		if not list:
+			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["enabled"] = True
 
 		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			return json_data['lists'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1462,18 +1573,25 @@ class ListAPI:
 		:param: address: List address
 		:returns: JSON object
 		"""
-		try:
-			list = self.get_lists(address)["lists"][0]
-		except KeyError:
-			print("List not found")
-			return {}
+		list = self.get_lists(address)
+
+		if not list:
+			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["enabled"] = False
 
 		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			json_data = req.json()
+
+			if json_data['processed']['errors']:
+				# Method never handling more than 1 client
+				error = json_data['processed']['errors'][0]
+
+				raise ApiError(f"{error['item']} - {error['error']}") 
+
+			return json_data['lists'][0]
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1494,7 +1612,7 @@ class FtlAPI:
 		req = requests.get(self._pi.url + "/endpoints", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['endpoints']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1542,7 +1660,7 @@ class FtlAPI:
 		req = requests.get(self._pi.url + "/info/ftl", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['ftl']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1558,7 +1676,7 @@ class FtlAPI:
 		req = requests.get(self._pi.url + "/info/host", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['host']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1590,7 +1708,7 @@ class FtlAPI:
 		req = requests.get(self._pi.url + "/info/messages", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['messages']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1619,16 +1737,14 @@ class FtlAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def get_message_count(self):
+	def get_message_count(self) -> int:
 		"""
 		Get count of Pi-hole diagnosis messages
-
-		:returns: JSON object
 		"""
 		req = requests.get(self._pi.url + "/info/messages/count", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['count']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1660,7 +1776,7 @@ class FtlAPI:
 		req = requests.get(self._pi.url + "/info/sensors", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['sensors']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1676,7 +1792,7 @@ class FtlAPI:
 		req = requests.get(self._pi.url + "/info/system", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['system']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1692,7 +1808,7 @@ class FtlAPI:
 		req = requests.get(self._pi.url + "/info/version", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['version']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1830,7 +1946,7 @@ class NetworkAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['devices']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1870,7 +1986,7 @@ class NetworkAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['gateway']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1889,7 +2005,7 @@ class NetworkAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['interfaces']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -1908,7 +2024,7 @@ class NetworkAPI:
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['routes']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
@@ -2112,7 +2228,7 @@ class DhcpAPI:
 		req = requests.get(self._pi.url + "/dhcp/leases", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
-			return req.json()
+			return req.json()['leases']
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
