@@ -2165,13 +2165,15 @@ class ConfigAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def patch(self, config: dict):
+	def patch(self, config: dict, restart=True):
 		"""
 		Update one or several configurations at once
 
+		:param: (optional) restart: After a change, FTL needs to be restarted. Set this to `False` if FTL should not restart automatically, e.g. to apply several changes. Keep in mind to restart manually after that.
+
 		:returns: JSON object
 		"""
-		req = requests.patch(self._pi.url + "/config", json=config, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.patch(self._pi.url + f"/config?restart={restart}", json=config, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			return req.json()
@@ -2181,13 +2183,15 @@ class ConfigAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def set(self, element: str, value: str):
+	def set(self, element: str, value: str, restart=True):
 		"""
 		Set Pi-hole config
 
+		:param: (optional) restart: After a change, FTL needs to be restarted. Set this to `False` if FTL should not restart automatically, e.g. to apply several changes. Keep in mind to restart manually after that.
+
 		:returns: None if successful, JSON object otherwise
 		"""
-		req = requests.put(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.put(self._pi.url + f"/config/{element}/{value}?restart={restart}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 201:
 			print(f"Config '{element}' successfully set")
@@ -2200,12 +2204,14 @@ class ConfigAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def delete(self, element: str, value: str):
+	def delete(self, element: str, value: str, restart=True):
 		"""
 		Delete Pi-hole config
+
+		:param: (optional) restart: After a change, FTL needs to be restarted. Set this to `False` if FTL should not restart automatically, e.g. to apply several changes. Keep in mind to restart manually after that.
 		"""
-		req = requests.delete(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
-		
+		req = requests.delete(self._pi.url + f"/config/{element}/{value}?restart={restart}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
 		if req.status_code == 204:
 			print(f"Config '{element}' deleted")
 
