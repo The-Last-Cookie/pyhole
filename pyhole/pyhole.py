@@ -1293,13 +1293,12 @@ class ListAPI:
 		"""
 		payload = {
 			"address": address,
-			"type": type,
 			"comment": comment,
 			"groups": groups,
 			"enabled": enabled
 		}
 
-		req = requests.post(self._pi.url + "/lists", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.post(self._pi.url + f"/lists?type={type}", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 201:
 			json_data = req.json()
