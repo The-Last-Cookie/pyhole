@@ -2038,13 +2038,13 @@ class ActionAPI:
 
 	def flush_network_table(self):
 		"""
-		Flush the network table (ARP)
+		Flush the network table
 
 		For this to work, the webserver.api.allow_destructive setting needs to be _True_.
 
 		:returns: JSON object
 		"""
-		req = requests.post(self._pi.url + "/action/flush/arp", headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.post(self._pi.url + "/action/flush/network", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			return req.json()
