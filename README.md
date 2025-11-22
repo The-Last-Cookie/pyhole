@@ -1,6 +1,6 @@
 # pyhole
 
-![badge](https://badgen.net/badge/ftl/v6.2/blue)
+![badge](https://badgen.net/badge/ftl/v6.3.3/blue)
 ![badge](https://badgen.net/badge/python/v3.13/blue?icon=pypi)
 
 Python library for accessing the Pihole 6 REST API.

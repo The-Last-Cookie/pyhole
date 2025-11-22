@@ -1293,19 +1293,18 @@ class ListAPI:
 		"""
 		payload = {
 			"address": address,
-			"type": type,
 			"comment": comment,
 			"groups": groups,
 			"enabled": enabled
 		}
 
-		req = requests.post(self._pi.url + "/lists", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.post(self._pi.url + f"/lists?type={type}", json=payload, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 201:
 			json_data = req.json()
 
 			if json_data['processed']['errors']:
-				# Method never handling more than 1 client
+				# Method never handling more than 1 list
 				error = json_data['processed']['errors'][0]
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
@@ -1367,36 +1366,38 @@ class ListAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def get_list(self, address: str):
+	def get_list(self, address: str, type: str):
 		"""
-		Get lists. By default, all lists will be returned.
+		Get specific list.
 
 		:param: address: Address of the list
+		:param: type: allow | block
 
 		:returns: JSON object or None if not found
 		"""
-		endpoint = "/lists/" + address
+		endpoint = f"/lists/{address}?type={type}"
 		req = requests.get(self._pi.url + endpoint, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			lists = req.json()['lists']
 			if len(lists) == 1:
 				return lists[0]
-
-			return None
+			else:
+				return None
 
 		if req.status_code == 401:
 			raise AuthenticationRequiredException("No valid session token provided")
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def delete_list(self, address: str):
+	def delete_list(self, address: str, type: str):
 		"""
 		Delete a list.
 
 		:param: address: Address of the list
+		:param: type: allow | block
 		"""
-		req = requests.delete(self._pi.url + f"/lists/{address}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.delete(self._pi.url + f"/lists/{address}?type={type}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 204:
 			print(f"List '{address}' deleted")
@@ -1435,28 +1436,29 @@ class ListAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def update_list_comment(self, address: str, comment: str):
+	def update_list_comment(self, address: str, type: str, comment: str):
 		"""
 		Update comment of list
 
 		:param: address: List address
+		:param: type: allow | block
 		:param: comment: Comment of the list
 		:returns: JSON object
 		"""
-		list = self.get_lists(address)
+		list = self.get_list(address, type)
 
 		if not list:
 			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["comment"] = comment
 
-		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.put(self._pi.url + f"/lists/{address}?type={type}", json=list, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			json_data = req.json()
 
 			if json_data['processed']['errors']:
-				# Method never handling more than 1 client
+				# Method never handling more than 1 list
 				error = json_data['processed']['errors'][0]
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
@@ -1476,20 +1478,20 @@ class ListAPI:
 		:param: type: allow | block
 		:returns: JSON object
 		"""
-		list = self.get_lists(address)
+		list = self.get_list(address, type)
 
 		if not list:
 			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["type"] = type
 
-		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.put(self._pi.url + f"/lists/{address}?type={type}", json=list, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			json_data = req.json()
 
 			if json_data['processed']['errors']:
-				# Method never handling more than 1 client
+				# Method never handling more than 1 list
 				error = json_data['processed']['errors'][0]
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
@@ -1501,28 +1503,29 @@ class ListAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def update_groups(self, address: str, groups: list):
+	def update_groups(self, address: str, type: str, groups: list):
 		"""
 		Update groups assigned to list
 
 		:param: address: List address
+		:param: type: allow | block
 		:param: groups: List of integers representing the group IDs
 		:returns: JSON object
 		"""
-		list = self.get_lists(address)
+		list = self.get_list(address, type)
 
 		if not list:
 			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["groups"] = groups
 
-		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.put(self._pi.url + f"/lists/{address}?type={type}", json=list, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			json_data = req.json()
 
 			if json_data['processed']['errors']:
-				# Method never handling more than 1 client
+				# Method never handling more than 1 list
 				error = json_data['processed']['errors'][0]
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
@@ -1534,27 +1537,28 @@ class ListAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def enable(self, address: str):
+	def enable(self, address: str, type: str):
 		"""
 		Enable list
 
 		:param: address: List address
+		:param: type: allow | block
 		:returns: JSON object
 		"""
-		list = self.get_lists(address)
+		list = self.get_list(address, type)
 
 		if not list:
 			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["enabled"] = True
 
-		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.put(self._pi.url + f"/lists/{address}?type={type}", json=list, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			json_data = req.json()
 
 			if json_data['processed']['errors']:
-				# Method never handling more than 1 client
+				# Method never handling more than 1 list
 				error = json_data['processed']['errors'][0]
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
@@ -1566,27 +1570,28 @@ class ListAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def disable(self, address: str):
+	def disable(self, address: str, type: str):
 		"""
 		Disable list
 
 		:param: address: List address
+		:param: type: allow | block
 		:returns: JSON object
 		"""
-		list = self.get_lists(address)
+		list = self.get_list(address, type)
 
 		if not list:
 			raise ItemNotFoundException(f"List '{address}' not found")
 
 		list["enabled"] = False
 
-		req = requests.put(self._pi.url + "/lists/" + address, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.put(self._pi.url + f"/lists/{address}?type={type}", json=list, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			json_data = req.json()
 
 			if json_data['processed']['errors']:
-				# Method never handling more than 1 client
+				# Method never handling more than 1 list
 				error = json_data['processed']['errors'][0]
 
 				raise ApiError(f"{error['item']} - {error['error']}") 
@@ -2038,13 +2043,13 @@ class ActionAPI:
 
 	def flush_network_table(self):
 		"""
-		Flush the network table (ARP)
+		Flush the network table
 
 		For this to work, the webserver.api.allow_destructive setting needs to be _True_.
 
 		:returns: JSON object
 		"""
-		req = requests.post(self._pi.url + "/action/flush/arp", headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.post(self._pi.url + "/action/flush/network", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			return req.json()
@@ -2159,13 +2164,15 @@ class ConfigAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def patch(self, config: dict):
+	def patch(self, config: dict, restart=True):
 		"""
 		Update one or several configurations at once
 
+		:param: (optional) restart: After a change, FTL needs to be restarted. Set this to `False` if FTL should not restart automatically, e.g. to apply several changes. Keep in mind to restart manually after that.
+
 		:returns: JSON object
 		"""
-		req = requests.patch(self._pi.url + "/config", json=config, headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.patch(self._pi.url + f"/config?restart={restart}", json=config, headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 200:
 			return req.json()
@@ -2175,13 +2182,15 @@ class ConfigAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def set(self, element: str, value: str):
+	def set(self, element: str, value: str, restart=True):
 		"""
 		Set Pi-hole config
 
+		:param: (optional) restart: After a change, FTL needs to be restarted. Set this to `False` if FTL should not restart automatically, e.g. to apply several changes. Keep in mind to restart manually after that.
+
 		:returns: None if successful, JSON object otherwise
 		"""
-		req = requests.put(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+		req = requests.put(self._pi.url + f"/config/{element}/{value}?restart={restart}", headers=self._pi._headers, verify=self._pi._cert_bundle)
 
 		if req.status_code == 201:
 			print(f"Config '{element}' successfully set")
@@ -2194,12 +2203,14 @@ class ConfigAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
-	def delete(self, element: str, value: str):
+	def delete(self, element: str, value: str, restart=True):
 		"""
 		Delete Pi-hole config
+
+		:param: (optional) restart: After a change, FTL needs to be restarted. Set this to `False` if FTL should not restart automatically, e.g. to apply several changes. Keep in mind to restart manually after that.
 		"""
-		req = requests.delete(self._pi.url + f"/config/{element}/{value}", headers=self._pi._headers, verify=self._pi._cert_bundle)
-		
+		req = requests.delete(self._pi.url + f"/config/{element}/{value}?restart={restart}", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
 		if req.status_code == 204:
 			print(f"Config '{element}' deleted")
 
