@@ -23,9 +23,9 @@ from pyhole import Pihole
 
 *Notice: This step is required for the script to work!*
 
-It is recommended that you use SSL for your requests to the API. Newer versions of the `request` module require the `KeyUsage` and `ExtendedKeyUsage` parameters to be set. By default, Pi-hole creates a certificate without these parameters. In any case, copy the root certificate (not the server certificate) (either `/etc/pihole/tls_ca.crt` or your own) to the device where the script is executed (e.g. `/home/user/pi_certificate.pem`). After that, set the `CERT_BUNDLE` variable e.g. in the `config.json` to the path where you stored the certificate.
+It is recommended that you use SSL for your requests to the API. Newer versions of the `request` module require the `KeyUsage` and `ExtendedKeyUsage` parameters to be set. By default, Pi-hole creates a certificate without these parameters. In any case, copy the root CA certificate without the private key (**not** the server certificate!) (by default `/etc/pihole/tls_ca.crt`) to the device where the script is executed (e.g. `/home/user/pi_certificate.pem`). After that, set the `CERT_BUNDLE` variable e.g. in the `config.json` to the path where you stored the certificate.
 
-If you don't want to use SSL, set the `CERT_BUNDLE` variable to `0`. Keep in mind though that the requests made to the API will be unencrypted in this case and warnings will be displayed on the console.
+If you don't want to use SSL, set the `CERT_BUNDLE` variable to `0` (integer). Keep in mind though that the requests made to the API will be unencrypted in this case and warnings will be displayed on the console.
 
 ## Example code
 
@@ -33,14 +33,15 @@ If you don't want to use SSL, set the `CERT_BUNDLE` variable to `0`. Keep in min
 from pyhole import Pihole
 
 # get data from config.json
-cert = get_config('cert_bundle')
-password = get_config('password')
+cert = "/path/to/cert.pem or crt"
+password = "your_password"
 
 pi = Pihole("https://pi.hole/api", cert)
 pi.authenticate(password)
 
 history = pi.metrics.get_history()
-devices = pi.network.get_devices()['devices']
+devices = pi.network.get_devices()
+gateway = pi.network.get_gateway()
 ```
 
 ## References
