@@ -2164,6 +2164,22 @@ class ConfigAPI:
 
 		raise ApiError("API request failed due to unknown reasons")
 
+	def get_properties(self):
+		"""
+		Get special properties of your Pi-hole configuration.
+
+		:returns: JSON object
+		"""
+		req = requests.get(self._pi.url + "/config/_properties", headers=self._pi._headers, verify=self._pi._cert_bundle)
+
+		if req.status_code == 200:
+			return req.json()["config"]
+
+		if req.status_code == 401:
+			raise AuthenticationRequiredException("No valid session token provided")
+
+		raise ApiError("API request failed due to unknown reasons")
+
 	def patch(self, config: dict, restart=True):
 		"""
 		Update one or several configurations at once
